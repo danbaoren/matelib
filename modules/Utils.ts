@@ -2,6 +2,7 @@
 import * as RE from 'rogue-engine';
 import { DataTexture, RedFormat, UnsignedByteType, RepeatWrapping } from 'three';
 import * as THREE from 'three';
+import { Scene } from './Scene'
 
 export class Utils {
     public static wait(ms: number): Promise<void> {
@@ -193,51 +194,24 @@ export class Utils {
         console.warn("NUKE INITIATED: Clearing scene and removing all custom event listeners.");
         RE.Debug.log("NUKE INITIATED: Clearing scene and removing all custom event listeners.");
 
-        // 1. Dispose of all objects in the scene
-        const scene = RE.Runtime.scene;
-        const objectsToRemove: THREE.Object3D[] = [];
+        const scene = RE.App.currentScene;
 
-        scene.traverse(object => {
-            objectsToRemove.push(object);
-        });
-
-        objectsToRemove.forEach(object => {
-            if (object.parent) {
-                object.parent.remove(object);
-            }
-
-            const mesh = object as THREE.Mesh;
-            if (mesh.geometry) {
-                mesh.geometry.dispose();
-            }
-
-            if (mesh.material) {
-                if (Array.isArray(mesh.material)) {
-                    mesh.material.forEach(material => material.dispose());
-                } else {
-                    (mesh.material as THREE.Material).dispose();
-                }
-            }
-        });
-        
-        // 2. Remove all children from the scene
-        while(scene.children.length > 0){ 
-            scene.remove(scene.children[0]); 
+        // To avoid modifying the array while iterating, we iterate over a copy.
+        const childrenCopy = [...scene.children];
+        for (const object of childrenCopy) {
+            // Use Scene.destroy to handle removal and asset disposal recursively.
+            Scene.destroy(object, true);
         }
 
-        // 3. Clear the renderer
-        if (RE.Runtime.renderer) {
-            RE.Runtime.renderer.clear();
+        // The loop above should have removed all children. This is a safeguard.
+        while (scene.children.length > 0) {
+            console.warn("Nuke: Scene still has children after main loop, removing forcefully.");
+            scene.remove(scene.children[0]);
         }
 
-
-        // TODO: make so it will ignore all rogue ui elements and event listeners inside them, delete only "undetected object"
-        // 4. Remove all custom event listeners
-        //const allElements = document.querySelectorAll('*');
-        //allElements.forEach(element => {
-        //    const newElement = element.cloneNode(true);
-        //    element.parentNode?.replaceChild(newElement, element);
-        //});
+        // The original nuke had a TODO for event listeners. That's a complex topic
+        // and probably out of scope for a simple scene clear. The commented out
+        // code is a brute-force way to do it, but can have side effects.
 
         console.log("Nuke complete. Engine state reset to pre-runtime.");
         RE.Debug.log("Nuke complete. Engine state reset to pre-runtime.");

@@ -9,7 +9,7 @@
  * --- SETUP ---
  * 1. Place this file in your project's `Assets` folder.
  * 2. In any component script, import it with:
- *    `import MATE from 'Assets/matelib/mate';`
+ *    `import mate from '../matelib/mate';
  *
  * --- EXPANDING ---
  * To add a new module:
@@ -38,6 +38,8 @@ import { ColyseusClient } from './modules/Colyseus';
 import Docmaker from './modules/Docmaker';
 import { Raycast } from './modules/Raycast';
 import { Debug } from './modules/Debug';
+import { Animation } from './modules/Animation';
+import { InputManager } from './modules/InputManager';
 
 export default class mate {
     public static log = Logger.log.bind(Logger);
@@ -63,6 +65,8 @@ export default class mate {
     public static docmaker = Docmaker;
     public static raycast = Raycast;
     public static debug = Debug;
+    public static animation = Animation;
+    public static input = InputManager.getInstance();
 
     public static nuke = Utils.nuke;
 
@@ -71,6 +75,7 @@ export default class mate {
         if (!RE.Runtime.isRunning) {
             return;
         }
+
 
         // Auto-initialize audio on first user interaction.
         const initAudioOnce = () => {

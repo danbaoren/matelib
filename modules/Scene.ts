@@ -27,7 +27,7 @@ export class Scene {
             component?: new (...args: any[]) => RE.Component;
             predicate?: (obj: THREE.Object3D) => boolean;
         },
-        parent: THREE.Object3D = RE.App.currentScene
+        parent: THREE.Object3D = RE.Runtime.scene
     ): THREE.Object3D | null {
         let found: THREE.Object3D | null = null;
 
@@ -73,7 +73,7 @@ export class Scene {
             component?: new (...args: any[]) => RE.Component;
             predicate?: (obj: THREE.Object3D) => boolean;
         },
-        parent: THREE.Object3D = RE.App.currentScene
+        parent: THREE.Object3D = RE.Runtime.scene
     ): THREE.Object3D[] {
         const found: THREE.Object3D[] = [];
 
@@ -244,6 +244,30 @@ export class Scene {
     }
 
     /**
+     * Finds and destroys all objects whose names contain a specific string.
+     * This is useful for cleaning up objects that may have dynamic IDs in their names but share a common identifier.
+     * @param namePart The string to search for within the object names. The search is case-sensitive.
+     * @param parent The object to start the search from (defaults to the current scene).
+     * @param disposeAssets If true, also disposes of the geometries and materials of the destroyed objects to free up memory.
+     */
+    public static destroyObjectsByNameContaining(
+        namePart: string,
+        parent: THREE.Object3D = RE.Runtime.scene,
+        disposeAssets: boolean = false
+    ): void {
+        // Use a regular expression to find objects whose names contain the given string.
+        const objectsToDestroy = this.findObjects({ name: new RegExp(namePart) }, parent);
+
+        if (objectsToDestroy.length === 0) {
+            Logger.log(`No objects found with name containing "${namePart}" to destroy.`, "Scene");
+            return;
+        }
+
+        Logger.log(`Destroying ${objectsToDestroy.length} objects with name containing "${namePart}".`, "Scene");
+        objectsToDestroy.forEach(obj => this.destroy(obj, disposeAssets));
+    }
+
+    /**
      * Adds a component to an object by the component's class name.
      * @param object The Object3D to add the component to.
      * @param componentName The string name of the component class (e.g., "MyComponent").
@@ -325,7 +349,7 @@ export class Scene {
      * @param parent The parent to add the mesh to (defaults to the current scene).
      * @returns The newly created THREE.Mesh.
      */
-    public static createMesh(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], name: string = "MeshObject", parent: THREE.Object3D = RE.App.currentScene): THREE.Mesh {
+    public static createMesh(geometry: THREE.BufferGeometry, material: THREE.Material | THREE.Material[], name: string = "MeshObject", parent: THREE.Object3D = RE.Runtime.scene): THREE.Mesh {
         const mesh = new THREE.Mesh(geometry, material);
         mesh.name = name;
         parent.add(mesh);
@@ -339,7 +363,7 @@ export class Scene {
      * @param parent The parent to add the folder to (defaults to the current scene).
      * @returns The newly created folder Object3D.
      */
-    public static createFolder(name: string = "NewFolder", parent: THREE.Object3D = RE.App.currentScene): THREE.Object3D {
+    public static createFolder(name: string = "NewFolder", parent: THREE.Object3D = RE.Runtime.scene): THREE.Object3D {
         return this.createEmpty(name, parent);
     }
 
@@ -404,5 +428,228 @@ export class Scene {
                 }
             });
         });
+    }
+
+    /**
+     * Logs a formatted, interactive tree of the scene graph to the console.
+     * This helps in visualizing the hierarchy, attached components, and properties of objects.
+     * @param parent The object to start the traversal from (defaults to the current scene).
+     */
+    public static logSceneGraph(parent: THREE.Object3D = RE.Runtime.scene): void {
+        Logger.log(`%c--- Scene Graph for: ${parent.name || 'Unnamed Scene'} ---`, 'color: #2196F3; font-weight: bold;');
+
+        const traverseAndLog = (obj: THREE.Object3D) => {
+            const components = this.getAllComponents(obj);
+            const hasChildren = obj.children.length > 0;
+            const hasComponents = components.length > 0;
+
+            const objectInfo = {
+                name: obj.name || '(unnamed)',
+                type: obj.type,
+                id: obj.id,
+                uuid: obj.uuid,
+                visible: obj.visible,
+                position: obj.position.toArray(),
+                rotation: obj.rotation.toArray(),
+                scale: obj.scale.toArray(),
+            };
+
+            const groupLabel = `${objectInfo.name} (${objectInfo.type})`;
+
+            if (hasChildren || hasComponents) {
+                Logger.log('%cObject Details:', 'color: #9E9E9E; font-weight: bold;', objectInfo);
+
+                if (hasComponents) {
+                    components.forEach(comp => {
+                        Logger.log(comp); // Log the component instance for full inspection
+                    });
+                }
+
+                if (hasChildren) {
+                    obj.children.forEach(child => traverseAndLog(child));
+                }
+
+            }
+        };
+        parent.children.forEach(child => traverseAndLog(child));
+    }
+
+    /**
+     * Applies a unified shadow and lighting logic to all meshes in the scene.
+     * It ensures that all meshes cast and receive shadows and uses a standard material
+     * for consistent lighting effects.
+     * @param parent The object to start the traversal from (defaults to the current scene).
+     */
+    public static unifyShadowsAndLights(parent: THREE.Object3D = RE.Runtime.scene): void {
+        Logger.log('Unifying shadows and lights for the scene...', 'Scene');
+
+        parent.traverse(obj => {
+            if (obj instanceof THREE.Mesh) {
+                const mesh = obj as THREE.Mesh;
+
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+
+                const newMaterials = materials.map(oldMaterial => {
+                    if (oldMaterial instanceof THREE.ShaderMaterial) {
+                        Logger.warn(`Skipping ShaderMaterial on object '${mesh.name}'. Manual setup required for shadows.`);
+                        return oldMaterial;
+                    } else if (oldMaterial instanceof THREE.MeshStandardMaterial || oldMaterial instanceof THREE.MeshPhysicalMaterial) {
+                        return oldMaterial; // Already supports shadows, no change needed
+                    } else {
+                        const newMaterial = new THREE.MeshStandardMaterial();
+
+                        // Copy common properties
+                        if ((oldMaterial as any).color) newMaterial.color.copy((oldMaterial as any).color);
+                        if ((oldMaterial as any).map) newMaterial.map = (oldMaterial as any).map;
+                        if ((oldMaterial as any).normalMap) newMaterial.normalMap = (oldMaterial as any).normalMap;
+                        if ((oldMaterial as any).aoMap) newMaterial.aoMap = (oldMaterial as any).aoMap;
+                        if ((oldMaterial as any).emissiveMap) newMaterial.emissiveMap = (oldMaterial as any).emissiveMap;
+                        if ((oldMaterial as any).emissive) newMaterial.emissive.copy((oldMaterial as any).emissive);
+                        if ((oldMaterial as any).metalnessMap) newMaterial.metalnessMap = (oldMaterial as any).metalnessMap;
+                        if ((oldMaterial as any).metalness) newMaterial.metalness = (oldMaterial as any).metalness;
+                        if ((oldMaterial as any).roughnessMap) newMaterial.roughnessMap = (oldMaterial as any).roughnessMap;
+                        if ((oldMaterial as any).roughness) newMaterial.roughness = (oldMaterial as any).roughness;
+
+                        oldMaterial.dispose();
+                        return newMaterial;
+                    }
+                });
+
+                mesh.material = newMaterials.length > 1 ? newMaterials : newMaterials[0];
+            }
+        });
+
+        Logger.log('Shadow and light unification complete.', 'Scene');
+    }
+
+    /**
+     * Configures the renderer and a specific light for advanced, scene-wide shadows.
+     * @param light The light source that will cast shadows (e.g., DirectionalLight or SpotLight).
+     * @param shadowMapSize The resolution of the shadow map (higher is better quality, but worse performance). Defaults to 2048.
+     */
+    public static setupAdvancedShadows(light: THREE.Light, shadowMapSize: number = 2048): void {
+        Logger.log('Setting up advanced shadows...', 'Scene');
+
+        // 1. Configure the renderer
+        RE.Runtime.renderer.shadowMap.enabled = true;
+        RE.Runtime.renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Softer, more realistic shadows
+
+        // 2. Configure the light
+        light.castShadow = true;
+
+        // 3. Configure the light's shadow properties
+        if (light.shadow) {
+            light.shadow.mapSize.width = shadowMapSize;
+            light.shadow.mapSize.height = shadowMapSize;
+
+            // Adjust the shadow camera frustum to fit your scene.
+            // This is critical: if objects are outside this box, they won't cast shadows.
+            if (light.shadow.camera) {
+                light.shadow.camera.near = 0.5;
+                light.shadow.camera.far = 500;
+                light.shadow.camera.left = -100;
+                light.shadow.camera.right = 100;
+                light.shadow.camera.top = 100;
+                light.shadow.camera.bottom = -100;
+                light.shadow.camera.updateProjectionMatrix();
+            }
+        } else {
+            Logger.warn('The provided light does not have a shadow property.', 'Scene');
+        }
+
+        Logger.log('Advanced shadow setup complete.', 'Scene');
+    }
+
+    /**
+     * Creates an invisible ground plane that receives shadows, making shadows visible in scenes without a floor.
+     * @param size The size of the ground plane. Defaults to 500.
+     * @param parent The object to add the ground plane to (defaults to the current scene).
+     * @returns The created ground plane mesh.
+     */
+    public static createShadowGround(size: number = 500, parent: THREE.Object3D = RE.Runtime.scene): THREE.Mesh {
+        Logger.log('Creating shadow ground...', 'Scene');
+
+        const groundGeometry = new THREE.PlaneGeometry(size, size);
+        const groundMaterial = new THREE.ShadowMaterial();
+        groundMaterial.opacity = 0.5; // Adjust opacity for softer or harder shadows
+
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.name = "ShadowGround";
+        ground.receiveShadow = true;
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = 0;
+
+        parent.add(ground);
+
+        Logger.log('Shadow ground created.', 'Scene');
+        return ground;
+    }
+
+    /**
+     * Automatically adjusts the light's shadow camera to fit the entire scene.
+     * This is crucial for ensuring all objects in the scene can cast and receive shadows.
+     * @param light The light to adjust (must be a DirectionalLight).
+     * @param scene The scene to fit the shadow camera to.
+     */
+    public static fitShadowCameraToScene(light: THREE.DirectionalLight, scene: THREE.Object3D): void {
+        Logger.log('Fitting shadow camera to scene...', 'Scene');
+
+        const boundingBox = new THREE.Box3();
+        boundingBox.setFromObject(scene);
+
+        const size = boundingBox.getSize(new THREE.Vector3());
+        const center = boundingBox.getCenter(new THREE.Vector3());
+
+        light.shadow.camera.left = -size.x / 2;
+        light.shadow.camera.right = size.x / 2;
+        light.shadow.camera.top = size.y / 2;
+        light.shadow.camera.bottom = -size.y / 2;
+
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = Math.max(size.z, 1000);
+
+        light.position.set(center.x, center.y + size.y, center.z);
+        light.target.position.copy(center);
+
+        light.shadow.camera.updateProjectionMatrix();
+        light.target.updateMatrixWorld();
+
+        Logger.log('Shadow camera fitted to scene.', 'Scene');
+    }
+
+    /**
+     * Automatically adjusts the light's shadow camera to fit the entire scene, for a low-angle sun.
+     * This is crucial for ensuring all objects in the scene can cast and receive shadows.
+     * @param light The light to adjust (must be a DirectionalLight).
+     * @param scene The scene to fit the shadow camera to.
+     * @param shadowFar The maximum distance shadows can be cast. Defaults to 5000.
+     */
+    public static fitSunlightShadowToScene(light: THREE.DirectionalLight, scene: THREE.Object3D, shadowFar: number = 5000): void {
+        Logger.log('Fitting sunlight shadow camera to scene...', 'Scene');
+
+        const boundingBox = new THREE.Box3();
+        boundingBox.setFromObject(scene);
+
+        const size = boundingBox.getSize(new THREE.Vector3());
+        const center = boundingBox.getCenter(new THREE.Vector3());
+
+        light.shadow.camera.left = -size.x * 2;
+        light.shadow.camera.right = size.x * 2;
+        light.shadow.camera.top = size.y * 2;
+        light.shadow.camera.bottom = -size.y * 2;
+
+        light.shadow.camera.near = 1;
+        light.shadow.camera.far = shadowFar;
+
+        light.position.set(center.x + size.x, center.y + size.y, center.z + size.z);
+        light.target.position.copy(center);
+
+        light.shadow.camera.updateProjectionMatrix();
+        light.target.updateMatrixWorld();
+
+        Logger.log('Sunlight shadow camera fitted to scene.', 'Scene');
     }
 }

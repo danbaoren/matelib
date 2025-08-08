@@ -7,14 +7,36 @@ import { Octree } from './Octree';
 import { Utils } from './Utils';
 
 export class Prefab {
-    public static find(nameOrPath: string): string | null {
+    /**
+     * Asynchronously finds a prefab's full path from its name or a partial path.
+     * This method will wait and retry for a short period if the engine's prefab list
+     * is not yet populated, preventing race conditions on startup.
+     * @param nameOrPath The simple name (e.g., "MyPrefab") or path (e.g., "Enemies/Goblin") of the prefab.
+     * @param retries The number of times to check for the prefab list before failing.
+     * @param delay The delay in milliseconds between retries.
+     * @returns A promise that resolves to the full, normalized prefab path or null if not found.
+     */
+    public static async find(nameOrPath: string, retries: number = 5, delay: number = 50): Promise<string | null> {
+        // Wait for the prefab list to be populated, retrying a few times.
+        for (let i = 0; i < retries; i++) {
+            if (Object.keys(RE.Prefab.namedPrefabUUIDs).length > 0) {
+                break; // List is populated, we can proceed
+            }
+            await Utils.wait(delay);
+        }
+
+        const namedUUIDs = RE.Prefab.namedPrefabUUIDs;
+        if (Object.keys(namedUUIDs).length === 0) {
+            Logger.error(`Prefab list is empty. Could not find "${nameOrPath}".`);
+            return null;
+        }
+
         // Normalize input: remove .roguePrefab extension if present and normalize slashes
         let normalizedNameOrPath = nameOrPath.endsWith('.roguePrefab')
             ? nameOrPath.slice(0, -'.roguePrefab'.length)
             : nameOrPath;
         normalizedNameOrPath = normalizedNameOrPath.replace(/\\/g, '/'); // Ensure input also uses forward slashes
 
-        const namedUUIDs = RE.Prefab.namedPrefabUUIDs;
         const allNormalizedPrefabKeys = Object.keys(namedUUIDs).map(p => p.replace(/\\/g, '/')); // Normalize keys from RE.Prefab.namedPrefabUUIDs
 
         // 1. Exact match with normalized path
@@ -26,12 +48,10 @@ export class Prefab {
         const lowerCaseNormalizedNameOrPath = normalizedNameOrPath.toLowerCase();
         const caseInsensitiveMatch = allNormalizedPrefabKeys.find(p => p.toLowerCase() === lowerCaseNormalizedNameOrPath);
         if (caseInsensitiveMatch) {
-            Logger.warn(`Prefab.find: Found case-insensitive match for "${nameOrPath}": "${caseInsensitiveMatch}". Consider normalizing casing.`);
             return caseInsensitiveMatch;
         }
 
         // 3. Handle simple names (no slashes in input)
-        // This part is only for cases where the user provides just the file name, not a full path.
         if (!normalizedNameOrPath.includes('/')) {
             const matchingPaths = allNormalizedPrefabKeys.filter(p => {
                 const fileName = p.substring(p.lastIndexOf('/') + 1);
@@ -39,7 +59,6 @@ export class Prefab {
             });
 
             if (matchingPaths.length === 1) {
-                Logger.warn(`Prefab.find: Found simple name match for "${nameOrPath}": "${matchingPaths[0]}". Consider providing full path.`);
                 return matchingPaths[0];
             }
             if (matchingPaths.length > 1) {
@@ -53,7 +72,7 @@ export class Prefab {
     }
 
     public static async fetch(nameOrPath: string): Promise<RE.Prefab | null> {
-        let path = this.find(nameOrPath);
+        let path = await this.find(nameOrPath);
         if (!path) {
             Logger.error(`Could not fetch prefab. Prefab not found: "${nameOrPath}"`);
             return null;
@@ -68,8 +87,8 @@ export class Prefab {
         }
     }
 
-    public static get(nameOrPath: string): RE.Prefab | null {
-        let path = this.find(nameOrPath);
+    public static async get(nameOrPath: string): Promise<RE.Prefab | null> {
+        let path = await this.find(nameOrPath);
         if (!path) {
             return null;
         }
@@ -77,7 +96,7 @@ export class Prefab {
         try {
             return RE.Prefab.get(path);
         } catch (error) {
-            Logger.log(`Could not get prefab synchronously for "${path}". It may not be preloaded.`);
+            Logger.log(`Could not get prefab for "${path}". It may not be preloaded.`);
             return null;
         }
     }
@@ -112,7 +131,7 @@ export class Prefab {
             name?: string;
         } = {}
     ): Promise<THREE.Object3D | null> {
-        let path = this.find(nameOrPath);
+        let path = await this.find(nameOrPath);
         if (!path) {
             return null;
         }
@@ -150,6 +169,77 @@ export class Prefab {
             Logger.error(`Error during instantiation of prefab "${path}":`, error);
             return null;
         }
+    }
+
+    /**
+     * Instantiates multiple prefabs by their names or paths.
+     * This is a convenience method for calling `instantiate` on a list of prefabs.
+     * It will return an array of successfully instantiated objects, filtering out any that failed.
+     * @param namesOrPaths A list of prefab names or paths to instantiate.
+     * @returns A promise that resolves to an array of the instantiated Object3D instances.
+     */
+    public static async instantiateMultiple(...namesOrPaths: string[]): Promise<THREE.Object3D[]> {
+        const instantiationPromises = namesOrPaths.map(nameOrPath => this.instantiate(nameOrPath));
+        const instances = await Promise.all(instantiationPromises);
+        // Filter out any null results from failed instantiations and ensure type safety
+        return instances.filter((instance): instance is THREE.Object3D => instance !== null);
+    }
+
+    /**
+     * Applies a shader to all meshes within a given Object3D instance.
+     * This will replace the existing material(s) on each mesh and dispose of the old ones to prevent memory leaks.
+     *
+     * @param instance The root Object3D of the prefab or model.
+     * @param shader A `THREE.ShaderMaterial` instance or a shader definition object.
+     *               A single material instance will be created from the provided shader and shared across all meshes.
+     *               This is efficient and allows you to control all meshes by modifying one material's uniforms.
+     * @example
+     * // --- 1. Using a shader definition object (e.g., from another file) ---
+     * import { DissolveShader } from './DissolveShader';
+     *
+     * const myInstance = await Prefab.instantiate("MyObject");
+     *
+     * // This will create ONE material from the DissolveShader definition
+     * // and apply it to ALL meshes within myInstance.
+     * Prefab.applyShader(myInstance, DissolveShader);
+     *
+     * // --- 2. Using a pre-created THREE.ShaderMaterial instance ---
+     * const mySharedMaterial = new THREE.ShaderMaterial({ ... });
+     * Prefab.applyShader(myInstance, mySharedMaterial);
+     *
+     * // Now you can animate mySharedMaterial.uniforms.some_value.value
+     * // and all meshes in myInstance will update together.
+     */
+    public static applyShader(
+        instance: THREE.Object3D,
+        shader: THREE.ShaderMaterial | { vertexShader: string, fragmentShader: string, uniforms?: { [uniform: string]: THREE.IUniform } }
+    ): void {
+        if (!instance) {
+            Logger.error("Prefab.applyShader: Provided instance is null or undefined.");
+            return;
+        }
+
+        let materialToApply: THREE.ShaderMaterial;
+
+        if (shader instanceof THREE.ShaderMaterial) {
+            materialToApply = shader;
+        } else {
+            materialToApply = new THREE.ShaderMaterial({
+                vertexShader: shader.vertexShader,
+                fragmentShader: shader.fragmentShader,
+                uniforms: shader.uniforms || {},
+                transparent: true, // Common default for effects
+                side: THREE.DoubleSide,
+            });
+        }
+
+        instance.traverse(child => {
+            if (child instanceof THREE.Mesh) {
+                if (Array.isArray(child.material)) child.material.forEach(mat => mat.dispose());
+                else if (child.material) child.material.dispose();
+                child.material = materialToApply;
+            }
+        });
     }
 
     public static destroy(instance: THREE.Object3D, disposeAssets: boolean = false): void {
@@ -191,7 +281,7 @@ interface StreamablePrefab {
 
 export class PrefabStreamer {
     
-    private prefabs: Map<string, StreamablePrefab> = new Map();
+    public prefabs: Map<string, StreamablePrefab> = new Map();
     public target: THREE.Object3D | null;
     private folders: Map<string, THREE.Object3D> = new Map();
     private enableLogging: boolean;
@@ -204,6 +294,8 @@ export class PrefabStreamer {
     private maxRenderDistance: number = 0;
     private updateInterval: number;
     private lastUpdateTime: number = 0;
+    private maxConcurrentLoads: number;
+    private currentlyLoadingCount: number = 0;
 
     // Queues for smooth loading/unloading
     private loadQueue: StreamablePrefab[] = [];
@@ -218,6 +310,7 @@ export class PrefabStreamer {
         updateInterval?: number;
         fadeInDuration?: number;
         fadeOutDuration?: number;
+        maxConcurrentLoads?: number;
     }) {
         const {
             target,
@@ -226,7 +319,8 @@ export class PrefabStreamer {
             enableLogging = true,
             updateInterval = 250,
             fadeInDuration = 500,
-            fadeOutDuration = 500
+            fadeOutDuration = 500,
+            maxConcurrentLoads = 1
         } = options;
 
         this.target = target;
@@ -236,6 +330,7 @@ export class PrefabStreamer {
         this.updateInterval = updateInterval;
         this.fadeInDuration = fadeInDuration;
         this.fadeOutDuration = fadeOutDuration;
+        this.maxConcurrentLoads = maxConcurrentLoads;
     }
 
     async add(options: { id: string; path?: string; renderDistance: number; position?: THREE.Vector3; folder?: string }) {
@@ -248,7 +343,7 @@ export class PrefabStreamer {
             return;
         }
 
-        const fullPath = Prefab.find(pathOrName);
+        const fullPath = await Prefab.find(pathOrName);
         if (!fullPath) {
             if (this.enableLogging) {
                 Logger.error(`PrefabStreamer: Could not find prefab: "${pathOrName}"`);
@@ -256,21 +351,18 @@ export class PrefabStreamer {
             return;
         }
 
-        let discoveredPosition: Vector3;
+        let finalPosition = position;
 
-        // Perform the discovery process by instantiating a temporary prefab.
-        const tempInstance = await Prefab.instantiate(fullPath);
-        if (tempInstance) {
-            discoveredPosition = tempInstance.position.clone();
-
-            // Clean up the temporary instance.
-            Prefab.destroy(tempInstance);
-        } else {
-            Logger.error(`PrefabStreamer: Could not instantiate prefab to get position: ${fullPath}`);
-            discoveredPosition = new Vector3(); // Fallback to prevent crash
+        if (!finalPosition) {
+            const tempInstance = await Prefab.instantiate(fullPath);
+            if (tempInstance) {
+                finalPosition = tempInstance.position.clone();
+                Prefab.destroy(tempInstance);
+            } else {
+                Logger.error(`PrefabStreamer: Could not instantiate prefab to get position: ${fullPath}`);
+                finalPosition = new Vector3(); // Fallback
+            }
         }
-
-        const finalPosition = position || discoveredPosition;
 
         const loadDistanceSq = renderDistance * renderDistance;
         const unloadDistance = renderDistance * this.unloadDistanceMultiplier;
@@ -319,6 +411,18 @@ export class PrefabStreamer {
             // For this use case, clearing and re-adding is simpler if removals are rare.
             // Or, we can just let it be, as it won't be in the main `prefabs` map anymore.
             this.prefabs.delete(id);
+        }
+    }
+
+    updateRenderDistance(id: string, distance: number) {
+        const prefab = this.prefabs.get(id);
+        if (prefab) {
+            prefab.renderDistance = distance;
+            prefab.loadDistanceSq = distance * distance;
+            prefab.unloadDistanceSq = (distance * this.unloadDistanceMultiplier) * (distance * this.unloadDistanceMultiplier);
+            if (this.enableLogging) {
+                Logger.log(`Updated render distance for ${id} to ${distance}`);
+            }
         }
     }
 
@@ -489,38 +593,30 @@ export class PrefabStreamer {
 
     private processQueues() {
         this.isProcessingQueues = true;
-        const frameBudgetMs = 4; // 4ms to stay well under 16ms for 60fps
-        const startTime = performance.now();
 
-        // Prioritize unloading to free up memory and reduce draw calls faster
-        while (this.unloadQueue.length > 0 && (performance.now() - startTime < frameBudgetMs)) {
+        // Unload as many as possible within the frame budget
+        while (this.unloadQueue.length > 0) {
             const prefabToUnload = this.unloadQueue.shift();
             if (prefabToUnload) {
                 this.unload(prefabToUnload);
             }
         }
 
-        // Then process loading
-        while (this.loadQueue.length > 0 && (performance.now() - startTime < frameBudgetMs)) {
+        // Load prefabs up to the concurrent limit
+        while (this.loadQueue.length > 0 && this.currentlyLoadingCount < this.maxConcurrentLoads) {
             const prefabToLoad = this.loadQueue.shift();
             if (prefabToLoad) {
-                // We don't await here. The async nature of `load` already prevents
-                // it from blocking the main thread. This allows us to fire off
-                // multiple load requests within our time budget.
                 this.load(prefabToLoad);
             }
         }
 
-        // If there's more work, schedule the next processing cycle to not block the main thread
-        if (this.loadQueue.length > 0 || this.unloadQueue.length > 0) {
-            requestAnimationFrame(() => this.processQueues());
-        } else {
-            this.isProcessingQueues = false;
-        }
+        this.isProcessingQueues = false;
     }
 
     private async load(prefab: StreamablePrefab) {
         if (prefab.isLoaded) return;
+
+        this.currentlyLoadingCount++;
         prefab.isLoaded = true; // Mark as loaded to prevent re-queueing
 
         let parentFolder: THREE.Object3D | undefined;
@@ -539,32 +635,38 @@ export class PrefabStreamer {
             Logger.log(`PrefabStreamer: Loading prefab: ${prefab.path}`);
         }
 
-        const instance = await Prefab.instantiate(prefab.path, { position: prefab.position });
-        if (instance) {
-            prefab.instance = instance;
-            prefab.originalScale = instance.scale.clone();
-            prefab.originalRotation = instance.rotation.clone();
+        try {
+            const instance = await Prefab.instantiate(prefab.path, { position: prefab.position });
+            if (instance) {
+                prefab.instance = instance;
+                prefab.originalScale = instance.scale.clone();
+                prefab.originalRotation = instance.rotation.clone();
 
-            // Wait 10ms before moving to the folder
-            await new Promise(resolve => setTimeout(resolve, 0));
+                if (parentFolder) {
+                    parentFolder.add(instance);
+                }
+                
+                this.setPrefabOpacity(instance, 0);
+                prefab.fadeState = 'in';
+                prefab.fadeProgress = 0;
+                prefab.animationParams = this.generateRandomAnimationParams();
 
-            if (parentFolder) {
-                parentFolder.add(instance);
+                this.loadedPrefabs.set(prefab.id, prefab);
+            } else {
+                prefab.isLoaded = false; // Reset if instantiation failed
+                this.prefabs.delete(prefab.id);
+                if (this.enableLogging) {
+                    Logger.error(`PrefabStreamer: Failed to instantiate prefab: ${prefab.path}`)
+                }
             }
-            
-            // --- FADE IN LOGIC ---
-            this.setPrefabOpacity(instance, 0); // Start fully transparent
-            prefab.fadeState = 'in';
-            prefab.fadeProgress = 0;
-            prefab.animationParams = this.generateRandomAnimationParams();
-            // --- END FADE IN LOGIC ---
-
-            this.loadedPrefabs.set(prefab.id, prefab);
-        } else {
+        } catch (error) {
             prefab.isLoaded = false;
             this.prefabs.delete(prefab.id);
-            if (this.enableLogging) {
-                Logger.error(`PrefabStreamer: Failed to instantiate prefab: ${prefab.path}`)
+            Logger.error(`PrefabStreamer: Error during prefab instantiation: ${prefab.path}`, error);
+        } finally {
+            this.currentlyLoadingCount--;
+            if (!this.isProcessingQueues) {
+                this.processQueues();
             }
         }
     }

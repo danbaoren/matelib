@@ -83,6 +83,35 @@ export class rogueEditorAPI {
         return editorAPI.getProjectPath();
     }
 
+    public static getStatic(path: string): string | undefined {
+        return RE.getStaticPath(path);
+    }
+
+    /**
+     * Reads a file from the Static directory at runtime by fetching its URL.
+     * @param path The path to the file relative to the Static directory (e.g., "MyData/config.json").
+     * @returns A promise that resolves to the file content as a string, or null if the file cannot be read.
+     */
+    public static async readStaticFile(path: string): Promise<string | null> {
+        const url = RE.getStaticPath(path);
+        if (!url) {
+            console.error(`[MATE] Could not get static path for: ${path}`);
+            return null;
+        }
+
+        try {
+            const response = await fetch(url);
+            if (response.ok) {
+                return await response.text();
+            }
+            console.error(`[MATE] Failed to fetch static file. Status: ${response.status}`, url);
+            return null;
+        } catch (e) {
+            console.error(`[MATE] Error fetching static file at ${path}:`, e);
+            return null;
+        }
+    }
+
     /**
      * Joins multiple path segments into a single, platform-correct path.
      * @param args Path segments to join.

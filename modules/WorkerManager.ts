@@ -154,19 +154,37 @@ export class WorkerManager {
 
     /**
      * Runs a task in a new worker by serializing a function.
-     * The provided function will be wrapped and executed in the worker,
-     * automatically using the `workerAPI.onTask` mechanism.
-     * @param func The function to execute in the worker. The function must be self-contained.
-     * @param data The data to send to the worker.
-     * @param options Configuration for the task (timeout, progress callback, etc.).
+     *
+     * **IMPORTANT:** The provided function is serialized to a string and executed in a completely
+     * isolated worker environment. This has several critical implications:
+     * - **No Closures:** The function cannot access any variables from its parent scope (closure).
+     *   It must be entirely self-contained or rely only on the `data` passed to it.
+     * - **No Imports:** Standard `import` or `require` statements inside the function will not work.
+     *   Use the `dependencies` option to load external scripts.
+     * - **Native Code:** Functions that rely on native code (e.g., bound functions, some browser APIs)
+     *   cannot be serialized and will throw an error.
+     *
+     * @param func The self-contained function to execute in the worker.
+     * @param data The data to send to the worker, which will be the first argument to `func`.
+     * @param options Configuration for the task (timeout, dependencies, progress callback, etc.).
      * @returns A `WorkerTask` object containing the result promise and a cancel function.
+     * @throws {Error} If the function appears to be native code that cannot be serialized.
      */
     public runFromFunction<T, R>(func: (data: T) => R, data: T, options: WorkerOptions = {}): WorkerTask<R> {
-        // Wrap the user's function in a structure that uses the workerAPI.onTask
+        const funcString = func.toString();
+
+        if (funcString.includes('[native code]')) {
+            throw new Error('Cannot serialize native or bound functions to a worker. Please provide a self-contained, standard JavaScript function.');
+        }
+
+        // Wrap the user's function in a structure that uses the workerAPI.onTask.
+        // The `((${funcString}))` syntax ensures that both regular functions and arrow functions
+        // are correctly interpreted as a function expression.
         const workerCode = `
-            workerAPI.onTask((${func.toString()}));
+            workerAPI.onTask((${funcString}));
         `;
-        // Use runFromCode to execute this generated code
+
+        // Use runFromCode to execute this generated code, passing along dependencies.
         return this.runFromCode<T, R>(workerCode, data, options);
     }
 

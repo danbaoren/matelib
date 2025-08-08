@@ -373,6 +373,54 @@ export class AssetManager {
     }
 
     /**
+     * A dictionary mapping language extensions to their corresponding MIME types.
+     * This ensures that code files are downloaded with the correct type,
+     * allowing browsers and code editors to handle them appropriately.
+     */
+    private static languageMimeTypes: { [key: string]: string } = {
+        ts: 'application/typescript',
+        js: 'application/javascript',
+        json: 'application/json',
+        html: 'text/html',
+        css: 'text/css',
+        xml: 'application/xml',
+        py: 'text/x-python',
+        md: 'text/markdown',
+        java: 'text/x-java-source',
+        c: 'text/x-c',
+        cpp: 'text/x-c++',
+        cs: 'text/plain', // C#
+        php: 'application/x-httpd-php',
+        rb: 'application/x-ruby',
+        go: 'text/x-go',
+        rs: 'text/rust', // Rust
+        swift: 'text/x-swift',
+        kt: 'text/x-kotlin', // Kotlin
+        sql: 'application/sql',
+        sh: 'application/x-sh',
+        glsl: 'text/plain',
+    };
+
+    /**
+     * Downloads a string of code as a file with the correct MIME type for the specified language.
+     * @param content The code content to download.
+     * @param filename The name of the file (e.g., 'my-component.ts').
+     * @param language The file extension of the programming language (e.g., 'ts', 'js', 'html').
+     * @example
+     * // Download a TypeScript file
+     * const tsCode = `class MyComponent { constructor() { console.log('Hello'); } }`;
+     * MATE.assets.downloadCode(tsCode, 'MyComponent.ts', 'ts');
+     *
+     * // Download an HTML file
+     * const htmlContent = `<h1>Hello, World!</h1>`;
+     * MATE.assets.downloadCode(htmlContent, 'index.html', 'html');
+     */
+    public static downloadCode(content: string, filename: string, language: string): void {
+        const mimeType = this.languageMimeTypes[language.toLowerCase()] || 'text/plain';
+        this.download(content, filename, mimeType);
+    }
+
+    /**
      * Downloads the content of a canvas as an image file.
      * @param canvas The HTMLCanvasElement to download.
      * @param filename The name of the image file (e.g., 'capture.png').
@@ -590,8 +638,13 @@ private static showScreenshotPreview(dataUrl: string) {
             return new Blob([content], { type: mimeType || 'text/plain' });
         }
 
-        if (content instanceof ArrayBuffer || ArrayBuffer.isView(content)) {
+        if (content instanceof ArrayBuffer) {
             return new Blob([content], { type: mimeType || 'application/octet-stream' });
+        }
+        if (ArrayBuffer.isView(content)) {
+            // Ensure we always pass a Uint8Array over an ArrayBuffer, not SharedArrayBuffer
+            const buffer = content.buffer instanceof ArrayBuffer ? content.buffer : new ArrayBuffer(0);
+            return new Blob([new Uint8Array(buffer, content.byteOffset, content.byteLength)], { type: mimeType || 'application/octet-stream' });
         }
 
         if (typeof content === 'object' && content !== null) {
