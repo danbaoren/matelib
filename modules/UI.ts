@@ -1,5 +1,6 @@
 import { DOM } from "./DOM";
 import * as THREE from 'three';
+import { Logger } from "./Logger";
 
 // --- Base Component Class ---
 type ComponentOptions = { id?: string; className?: string; style?: Partial<CSSStyleDeclaration>; parent?: HTMLElement | string; };
@@ -26,7 +27,10 @@ class Component {
     }
 
     public destroy() {
-        DOM.remove(this.element);
+        if (this.element) {
+            DOM.remove(this.element);
+            this.element = null as any;
+        }
     }
 }
 
@@ -58,113 +62,135 @@ export class Window extends Component {
     private boundOnMouseUp = this.onMouseUp.bind(this);
     private boundOnResizeMouseMove = this.onResizeMouseMove.bind(this);
     private boundOnResizeMouseUp = this.onResizeMouseUp.bind(this);
+    private options: WindowOptions;
 
     constructor(options: WindowOptions) {
-        let uiContainer = document.getElementById('game-ui-container');
-        if (!uiContainer) {
-            uiContainer = DOM.create('div', { id: 'game-ui-container', parent: document.body });
-        }
+        super('div', { ...options, parent: undefined }); // Defer attachment
+        this.options = options;
+        Logger.log(`Window created with ID: ${options.id || 'N/A'}`);
 
-        super('div', { ...options, parent: uiContainer, className: ['mate-window', options.className].join(' ') });
+        // Ensure the global stylesheet for all UI components is injected.
+        UI.injectStylesheet();
 
-        // Set initial position and size
-        DOM.setStyle(this.element, {
-            position: 'absolute',
-            top: options.initialPosition?.top || '50%',
-            left: options.initialPosition?.left || '50%',
-            width: options.initialSize?.width || '450px',
-            height: options.initialSize?.height || '500px',
-            minWidth: '200px', minHeight: '150px',
-            backgroundColor: '#2a2a2a',
-            border: '1px solid #444',
-            borderRadius: '8px',
-            boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
-            zIndex: '10000',
-            display: 'flex',
-            flexDirection: 'column',
-            fontFamily: 'Inter, sans-serif',
-            ...options.style
-        });
-
-        // Header
-        this.headerElement = DOM.create('div', {
-            className: 'mate-window-header',
-            parent: this.element,
-            style: {
-                cursor: 'grab',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '10px',
-                backgroundColor: '#3a3a3a',
-                borderBottom: '1px solid #444',
-                color: '#E0E0E0',
-                fontSize: '16px',
-                fontWeight: 'bold',
-                flexShrink: '0'
+        try {
+            let uiContainer = document.getElementById('game-ui-container');
+            if (!uiContainer) {
+                uiContainer = DOM.create('div', { id: 'game-ui-container', parent: document.body });
+                Logger.log('Created #game-ui-container.');
             }
-        });
+            DOM.append(uiContainer, this.element);
 
-        const titleSpan = DOM.create('span', {
-            text: options.title || 'Window',
-            parent: this.headerElement
-        });
+            // Set initial position and size
+            DOM.setStyle(this.element, {
+                position: 'absolute',
+                top: options.initialPosition?.top || '50%',
+                left: options.initialPosition?.left || '50%',
+                width: options.initialSize?.width || '450px',
+                height: options.initialSize?.height || '500px',
+                minWidth: '200px', minHeight: '150px',
+                backgroundColor: '#2a2a2a',
+                border: '1px solid #444',
+                borderRadius: '8px',
+                boxShadow: '0 4px 8px rgba(0, 0, 0, 0.3)',
+                zIndex: '10000',
+                display: 'flex',
+                flexDirection: 'column',
+                fontFamily: 'Inter, sans-serif',
+                transform: 'translate(-50%, -50%)',
+                ...options.style
+            });
 
-        const controlsContainer = DOM.create('div', {
-            parent: this.headerElement,
-            style: { display: 'flex', gap: '5px' }
-        });
+            // Header
+            this.headerElement = DOM.create('div', {
+                className: 'mate-window-header',
+                parent: this.element,
+                style: {
+                    cursor: 'grab',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '10px',
+                    backgroundColor: '#3a3a3a',
+                    borderBottom: '1px solid #444',
+                    color: '#E0E0E0',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    flexShrink: '0'
+                }
+            });
 
-        // Collapse/Expand Button
-        if (options.collapsible) {
-            this.collapseButton = DOM.create('button', {
-                text: '−',
-                className: 'mate-window-collapse-btn',
+            const titleSpan = DOM.create('span', {
+                text: options.title || 'Window',
+                parent: this.headerElement
+            });
+
+            const controlsContainer = DOM.create('div', {
+                parent: this.headerElement,
+                style: { display: 'flex', gap: '5px' }
+            });
+
+            // Collapse/Expand Button
+            if (options.collapsible) {
+                this.collapseButton = DOM.create('button', {
+                    text: '−',
+                    className: 'mate-window-collapse-btn',
+                    parent: controlsContainer,
+                    style: {
+                        background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#E0E0E0', lineHeight: '1', padding: '0 5px'
+                    },
+                    events: {
+                        click: (e) => { e.stopPropagation(); this.toggleCollapse(); }
+                    }
+                });
+            }
+
+            // Close Button
+            this.closeButton = DOM.create('button', {
+                text: '✕',
+                className: 'mate-window-close-btn',
                 parent: controlsContainer,
                 style: {
                     background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#E0E0E0', lineHeight: '1', padding: '0 5px'
                 },
                 events: {
-                    click: () => this.toggleCollapse()
+                    click: (e) => {
+                        e.stopPropagation();
+                        uiContainer = null;
+                        this.destroy();
+                    }
                 }
             });
-        }
 
-        // Close Button
-        this.closeButton = DOM.create('button', {
-            text: '✕',
-            className: 'mate-window-close-btn',
-            parent: controlsContainer,
-            style: {
-                background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer', color: '#E0E0E0', lineHeight: '1', padding: '0 5px'
-            },
-            events: {
-                click: () => {
-                    this.destroy();
-                    options.onClose?.();
+            // Content Area
+            this.contentElement = DOM.create('div', {
+                className: 'mate-window-content',
+                parent: this.element,
+                style: {
+                    flexGrow: '1',
+                    overflowY: 'auto',
+                    padding: '10px',
+                    color: '#E0E0E0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center'
                 }
+            });
+
+            // Make draggable
+            DOM.on(this.headerElement, 'mousedown', (e) => this.onMouseDown(e as MouseEvent));
+
+            // Add resize handles if resizable
+            if (options.resizable) {
+                this.element.style.overflow = 'hidden'; // Required for handles to work correctly
+                this._createResizeHandles(true);
             }
-        });
+            Logger.log(`Window ${options.id || 'N/A'} initialized successfully.`);
 
-        // Content Area
-        this.contentElement = DOM.create('div', {
-            className: 'mate-window-content',
-            parent: this.element,
-            style: {
-                flexGrow: '1',
-                overflowY: 'auto',
-                padding: '10px',
-                color: '#E0E0E0',
+        } catch (error) {
+            Logger.log(`Error initializing window ${options.id || 'N/A'}:`, error);
+            if (this.element) {
+                this.destroy(); // Attempt to clean up if something went wrong
             }
-        });
-
-        // Make draggable
-        DOM.on(this.headerElement, 'mousedown', (e) => this.onMouseDown(e as MouseEvent));
-
-        // Add resize handles if resizable
-        if (options.resizable) {
-            this.element.style.overflow = 'hidden'; // Required for handles to work correctly
-            this._createResizeHandles(true);
         }
     }
 
@@ -257,11 +283,25 @@ export class Window extends Component {
     }
 
     public destroy() {
-        document.removeEventListener('mousemove', this.boundOnMouseMove);
-        document.removeEventListener('mouseup', this.boundOnMouseUp);
-        document.removeEventListener('mousemove', this.boundOnResizeMouseMove);
-        document.removeEventListener('mouseup', this.boundOnResizeMouseUp);
-        super.destroy();
+        Logger.log(`Destroying window ${this.options.id || 'N/A'}`);
+        try {
+            // Call the onClose callback if it exists
+            if (this.options.onClose) {
+                this.options.onClose();
+            }
+            // Remove all event listeners to prevent memory leaks
+            document.removeEventListener('mousemove', this.boundOnMouseMove);
+            document.removeEventListener('mouseup', this.boundOnMouseUp);
+            document.removeEventListener('mousemove', this.boundOnResizeMouseMove);
+            document.removeEventListener('mouseup', this.boundOnResizeMouseUp);
+
+
+            // Call the super class destroy method to remove the element from DOM
+            super.destroy();
+            Logger.log(`Window ${this.options.id || 'N/A'} destroyed successfully.`);
+        } catch (error) {
+            Logger.log(`Error destroying window ${this.options.id || 'N/A'}:`, error);
+        }
     }
 
     public appendChild(child: HTMLElement) {
@@ -377,7 +417,7 @@ export class Window extends Component {
         if (this.collapseButton) {
             this.collapseButton.textContent = '+';
         }
-        (this as any).options.onCollapse?.();
+        this.options.onCollapse?.();
     }
 
     private expand() {
@@ -403,7 +443,7 @@ export class Window extends Component {
         if (this.collapseButton) {
             this.collapseButton.textContent = '−';
         }
-        (this as any).options.onExpand?.();
+        this.options.onExpand?.();
     }
 }
 
@@ -475,14 +515,54 @@ export class TextInput extends Component {
 
 export class Checkbox extends Component {
     public inputElement: HTMLInputElement;
+    private checkmarkElement: HTMLElement;
+    private labelSpan: HTMLElement | null = null;
+
     constructor(options: ComponentOptions & { label?: string; checked?: boolean; onChange?: (checked: boolean) => void }) {
-        super('label', { ...options, className: ['mate-checkbox', options.className].join(' ') });
-        this.inputElement = DOM.create('input', { attributes: { type: 'checkbox', checked: String(options.checked || false) } });
+        // Add default flex styles to the options, allowing user to override
+        const defaultStyle: Partial<CSSStyleDeclaration> = {
+            display: 'flex',
+            alignItems: 'center',
+            cursor: 'pointer',
+            userSelect: 'none',
+            gap: '8px' // Space between checkmark and label
+        };
+
+        super('label', {
+            ...options,
+            className: ['mate-checkbox', options.className].join(' '),
+            style: { ...defaultStyle, ...options.style }
+        });
+
+        // Hidden native checkbox
+        this.inputElement = DOM.create('input', {
+            attributes: { type: 'checkbox' },
+            style: {
+                position: 'absolute',
+                opacity: '0',
+                cursor: 'pointer',
+                height: '0',
+                width: '0'
+            }
+        });
+        this.setChecked(options.checked || false);
+
+        // Custom checkmark visual
+        this.checkmarkElement = DOM.create('span', { className: 'mate-checkmark' });
+
+        // Append elements
         DOM.append(this.element, this.inputElement);
-        if (options.label) DOM.append(this.element, DOM.create('span', { text: options.label }));
+        DOM.append(this.element, this.checkmarkElement);
+
+        if (options.label) {
+            this.labelSpan = DOM.create('span', { text: options.label, className: 'mate-checkbox-label' });
+            DOM.append(this.element, this.labelSpan);
+        }
+
         if (options.onChange) DOM.on(this.inputElement, 'change', () => options.onChange!((this.inputElement as HTMLInputElement).checked));
-        DOM.on(this.element, 'click', (ev) => ev.stopPropagation());
+        DOM.on(this.element, 'click', (ev) => ev.stopPropagation()); // Stop propagation to prevent parent elements (like a window) from being clicked
     }
+
     public getChecked = () => this.inputElement.checked;
     public setChecked = (checked: boolean) => this.inputElement.checked = checked;
 }
@@ -822,13 +902,10 @@ export class FloatingScene extends Component {
     }
 
     public destroy() {
-        this.options.onClose?.();
-        this.sceneView.destroy();
         document.removeEventListener('mousemove', this.boundOnMouseMove);
         document.removeEventListener('mouseup', this.boundOnMouseUp);
         document.removeEventListener('mousemove', this.boundOnResizeMouseMove);
         document.removeEventListener('mouseup', this.boundOnResizeMouseUp);
-        document.removeEventListener('click', this.boundOnDocumentClick);
         super.destroy();
     }
 
@@ -1050,6 +1127,149 @@ export class SceneView extends Component {
     }
 }
 
+export class Table extends Component {
+    public tableElement: HTMLTableElement;
+    public tHeadElement: HTMLTableSectionElement | null = null;
+    public tBodyElement: HTMLTableSectionElement;
+
+    constructor(options: ComponentOptions & { headers?: (string | HTMLElement)[] }) {
+        super('table', { ...options, className: ['mate-table', options.className].join(' ') });
+        this.tableElement = this.element as HTMLTableElement;
+
+        if (options.headers && options.headers.length > 0) {
+            this.tHeadElement = DOM.create('thead', { parent: this.tableElement });
+            const tr = DOM.create('tr', { parent: this.tHeadElement });
+            options.headers.forEach(headerContent => {
+                const th = DOM.create('th', { parent: tr });
+                if (typeof headerContent === 'string') {
+                    th.innerHTML = headerContent;
+                } else {
+                    th.appendChild(headerContent);
+                }
+            });
+        }
+
+        this.tBodyElement = DOM.create('tbody', { parent: this.tableElement });
+    }
+
+    public addRow(cells: (string | HTMLElement)[], cellStyles?: (Partial<CSSStyleDeclaration> | null)[]): HTMLTableRowElement {
+        const tr = DOM.create('tr', { parent: this.tBodyElement });
+        cells.forEach((cellContent, index) => {
+            const td = DOM.create('td', { parent: tr });
+            if (typeof cellContent === 'string') {
+                td.innerHTML = cellContent;
+            } else {
+                td.appendChild(cellContent);
+            }
+            if (cellStyles && cellStyles[index]) {
+                DOM.setStyle(td, cellStyles[index]!);
+            }
+        });
+        return tr;
+    }
+
+    public clearBody() {
+        DOM.empty(this.tBodyElement);
+    }
+}
+
+export class ProgressBar extends Component {
+    private fillElement: HTMLElement;
+    private labelElement: HTMLElement;
+
+    constructor(options: ComponentOptions & { label?: string }) {
+        super('div', { ...options, className: ['mate-progress-bar', options.className].join(' ') });
+
+        this.fillElement = DOM.create('div', { className: 'mate-progress-bar-fill', parent: this.element });
+        this.labelElement = DOM.create('span', { className: 'mate-progress-bar-label', parent: this.element, text: options.label || '0%' });
+
+        // Hide by default
+        this.element.style.display = 'none';
+    }
+
+    public setProgress(percentage: number, label?: string) {
+        const clampedPercentage = Math.max(0, Math.min(100, percentage));
+        this.fillElement.style.width = `${clampedPercentage}%`;
+        const percentageText = `${Math.round(clampedPercentage)}%`;
+        
+        if (label) {
+            this.labelElement.textContent = `${label} (${percentageText})`;
+        } else {
+            this.labelElement.textContent = percentageText;
+        }
+    }
+
+    public setLabel(text: string) {
+        this.labelElement.textContent = text;
+    }
+
+    public show() {
+        this.element.style.display = 'block';
+    }
+
+    public hide() {
+        this.element.style.display = 'none';
+    }
+}
+
+export class DropArea extends Component {
+    private hintElement: HTMLElement;
+
+    constructor(options: ComponentOptions & { onDrop: (e: DragEvent) => void }) {
+        // Don't pass style to super, handle it manually to merge with defaults
+        const baseOptions = { ...options };
+        delete baseOptions.style;
+        super('div', { ...baseOptions, className: ['mate-drop-area', options.className].join(' ') });
+
+        const defaultStyles: Partial<CSSStyleDeclaration> = {
+            border: '2px dashed #666',
+            borderRadius: '8px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            position: 'relative',
+            background: '#333',
+            transition: 'border-color 0.3s',
+            // Default size, can be overridden by options.style
+            width: '200px',
+            height: '200px',
+            margin: '32px',
+            overflow: 'hidden',
+        };
+
+        // Merge default styles with user-provided styles. User styles take precedence.
+        DOM.setStyle(this.element, { ...defaultStyles, ...options.style });
+        this.hintElement = DOM.create('span', {
+            text: 'Drag & Drop File Here',
+            parent: this.element,
+            style: { color: '#aaa' }
+        });
+
+        DOM.on(this.element, 'dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            DOM.setStyle(this.element, { borderColor: '#00ccff' });
+        });
+
+        DOM.on(this.element, 'dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            DOM.setStyle(this.element, { borderColor: '#666' });
+        });
+
+        DOM.on(this.element, 'drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            DOM.setStyle(this.element, { borderColor: '#666' });
+            options.onDrop(e as DragEvent);
+        });
+    }
+
+    public showHint(show: boolean) {
+        DOM.setStyle(this.hintElement, { display: show ? 'block' : 'none' });
+    }
+}
+
 // --- Notification System ---
 
 interface NotificationOptions {
@@ -1092,6 +1312,9 @@ export class UI {
     public static Canvas = Canvas;
     public static SceneView = SceneView;
     public static FloatingScene = FloatingScene;
+    public static Table = Table;
+    public static ProgressBar = ProgressBar;
+    public static DropArea = DropArea;
 
     /**
      * Initiates a site transition overlay with customizable animation.
@@ -1191,58 +1414,285 @@ export class UI {
         element.onmousedown = dragMouseDown;
     }
 
+    private static stylesheetInjected = false;
+
     /**
      * Injects the default stylesheet for all MATE UI components into the document head.
      * Should be called once at the start of the application.
      */
-    public static injectStylesheet() {
-        const styles = `
-            .mate-panel { background: #f0f0f0; border: 1px solid #ccc; padding: 10px; }
-            .mate-container { padding: 5px; border: 1px solid #eee; }
-            .mate-scroll-container { overflow-y: auto; border: 1px solid #ddd; padding: 5px; }
-            .mate-button { background: #007bff; color: white; border: none; padding: 10px 15px; cursor: pointer; }
-            .mate-text-input input { width: 100%; padding: 8px; border: 1px solid #ccc; }
-            .mate-label { font-weight: bold; margin-bottom: 5px; display: block; }
-            .mate-image { max-width: 100%; height: auto; display: block; }
-            .mate-form { padding: 10px; border: 1px solid #eee; }
-            .mate-window {
-                background-color: rgba(40, 40, 40, 0.9);
-                border: 1px solid #555;
-                border-radius: 8px;
-                box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
-                z-index: 1000;
-                font-family: 'Inter, sans-serif';
-                color: '#E0E0E0';
-                transition: width 0.2s ease, height 0.2s ease, border-radius 0.2s ease, background-color 0.2s ease, border 0.2s ease, box-shadow 0.2s ease;
-            }
-            .mate-window-header {
-                padding: 8px 12px;
-                background-color: #3a3a3a;
-                cursor: grab;
-                display: flex;
-                flex-direction: column;
-                gap: 8px;
-            }
-            .mate-window-close-btn, .mate-window-collapse-btn {
-                background: none;
-                border: none;
-                font-size: 18px;
-                cursor: pointer;
-                color: #E0E0E0;
-                line-height: 1;
-                padding: 0 5px;
-            }
-            .mate-window-content {
-                flex-grow: 1;
-                overflow: auto;
-                padding: 10px;
-                background-color: rgba(40, 40, 40, 0.9);
-                color: #E0E0E0;
-                border-top: 1px solid #555;
-            }
-        `;
-        const styleElement = DOM.create('style', { html: styles });
-        DOM.append(document.head, styleElement);
+public static injectStylesheet() {
+    if (this.stylesheetInjected) return;
+    const styleId = 'mate-ui-stylesheet';
+    if (document.getElementById(styleId)) {
+        this.stylesheetInjected = true;
+        return;
+    }
+
+    const styles = `
+        /* General resets and base styles for the UI */
+        .mate-window,
+        .mate-window-header,
+        .mate-window-content,
+        .mate-button,
+        .mate-text-input input {
+            box-sizing: border-box;
+        }
+
+        /* The main window container */
+        .mate-window {
+            background-color: #2c2f33;
+            border: 1px solid #4a4e54;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+            color: #f2f2f2;
+            overflow: hidden;
+            transition: all 0.2s ease-in-out;
+        }
+
+        /* Draggable header bar */
+        .mate-window-header {
+            padding: 10px 15px;
+            background-color: #23272a;
+            cursor: grab;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #4a4e54;
+            user-select: none;
+        }
+        
+        .mate-window-title {
+            font-weight: 600;
+            font-size: 16px;
+            color: #ffffff;
+        }
+
+        .mate-window-controls {
+            display: flex;
+            gap: 5px;
+        }
+
+        /* Header buttons (close, minimize, etc.) */
+        .mate-window-close-btn,
+        .mate-window-collapse-btn {
+            background: none;
+            border: none;
+            font-size: 20px;
+            line-height: 1;
+            color: #99aab5;
+            cursor: pointer;
+            padding: 0 4px;
+            transition: color 0.2s ease;
+        }
+
+        .mate-window-close-btn:hover {
+            color: #f04747;
+        }
+        
+        .mate-window-collapse-btn:hover {
+            color: #ffffff;
+        }
+
+        /* The scrollable content area */
+        .mate-window-content {
+            padding: 15px;
+            background-color: #2c2f33;
+            overflow-y: auto;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        /* Primary action button */
+        .mate-button {
+            background-color: #7289da;
+            color: #ffffff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .mate-button:hover {
+            background-color: #677bc4;
+        }
+
+        /* Input fields */
+        .mate-text-input input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid #4a4e54;
+            border-radius: 4px;
+            background-color: #23272a;
+            color: #ffffff;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .mate-text-input input:focus {
+            outline: none;
+            border-color: #7289da;
+            box-shadow: 0 0 0 1px #7289da;
+        }
+
+        /* --- Custom Checkbox --- */
+        .mate-checkbox {
+            /* Base styles are now set in the component constructor */
+            position: relative; /* For positioning the input */
+        }
+
+        .mate-checkmark {
+            position: relative;
+            height: 18px;
+            width: 18px;
+            background-color: #23272a;
+            border: 1px solid #4a4e54;
+            border-radius: 3px;
+            transition: background-color 0.2s, border-color 0.2s;
+            flex-shrink: 0; /* Prevent it from shrinking */
+        }
+
+        /* Checkmark symbol (the check) */
+        .mate-checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+            left: 6px;
+            top: 2px;
+            width: 5px;
+            height: 10px;
+            border: solid white;
+            border-width: 0 2px 2px 0;
+            transform: rotate(45deg);
+        }
+
+        /* Show the checkmark when the hidden input is checked */
+        .mate-checkbox input:checked ~ .mate-checkmark:after {
+            display: block;
+        }
+
+        /* Change background on check */
+        .mate-checkbox input:checked ~ .mate-checkmark {
+            background-color: #7289da;
+            border-color: #7289da;
+        }
+
+        /* Hover effect */
+        .mate-checkbox:hover .mate-checkmark {
+            border-color: #99aab5;
+        }
+
+        .mate-checkbox-label {
+            color: #b9bbbe;
+        }
+
+        /* Labels for inputs */
+        .mate-label {
+            font-weight: 500;
+            margin-bottom: 5px;
+            color: #b9bbbe;
+            display: block;
+        }
+
+        /* General container and panel styles */
+        .mate-panel,
+        .mate-container,
+        .mate-form {
+            background-color: #36393f;
+            border: 1px solid #4a4e54;
+            padding: 12px;
+            border-radius: 4px;
+        }
+
+        /* Scrollable container for lists, etc. */
+        .mate-scroll-container {
+            overflow-y: auto;
+            border: 1px solid #4a4e54;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #36393f;
+        }
+
+        /* Image styles */
+        .mate-image {
+            max-width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 4px;
+        }
+
+        /* --- Progress Bar --- */
+        .mate-progress-bar {
+            position: relative;
+            width: 100%;
+            height: 24px;
+            background-color: #23272a;
+            border: 1px solid #4a4e54;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+
+        .mate-progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background-color: #7289da; /* Fallback */
+            background-image: linear-gradient(
+                45deg, 
+                rgba(255, 255, 255, 0.15) 25%, 
+                transparent 25%, 
+                transparent 50%, 
+                rgba(255, 255, 255, 0.15) 50%, 
+                rgba(255, 255, 255, 0.15) 75%, 
+                transparent 75%, 
+                transparent
+            );
+            background-size: 40px 40px;
+            transition: width 0.3s ease-in-out;
+            animation: mate-progress-bar-stripes 1s linear infinite;
+        }
+
+        @keyframes mate-progress-bar-stripes {
+            from { background-position: 40px 0; }
+            to { background-position: 0 0; }
+        }
+    `;
+    const styleElement = DOM.create('style', { id: styleId, html: styles });
+    DOM.append(document.head, styleElement);
+    this.stylesheetInjected = true;
+}
+
+    /**
+     * Adds a new button to the specified parent element.
+     * @param parentSelector The selector string or HTMLElement to which the button will be appended.
+     * @param options Configuration for the button.
+     */
+    public static addButton(
+        parentSelector: string | HTMLElement,
+        options: {
+            text: string;
+            title?: string;
+            onClick: (event: MouseEvent) => void;
+            style?: Partial<CSSStyleDeclaration>;
+        }
+    ) {
+        const button = new UI.Button({
+            text: options.text,
+            onClick: options.onClick,
+            style: options.style,
+        });
+
+        if (options.title) {
+            button.element.title = options.title;
+        }
+
+        DOM.append(parentSelector, button.element);
     }
 
     /**
@@ -1251,51 +1701,67 @@ export class UI {
      * @param options A configuration object for the notification.
      */
     public static notify(message: string, options: NotificationOptions = {}) {
-        const { 
-            duration = 2500, 
-            ...styleOptions 
+        const {
+            duration = 3000,
+            ...styleOptions
         } = options;
 
         const notificationElement = DOM.create('div', {
             html: options.html || message
         });
 
+        // Base style
         DOM.setStyle(notificationElement, {
             position: 'fixed',
-            bottom: '20px',
-            right: '20px',
-            padding: '12px 20px',
-            backgroundColor: styleOptions.backgroundColor || 'rgba(30, 30, 30, 0.9)',
-            color: styleOptions.textColor || '#e0e0e0',
-            borderRadius: '8px',
-            zIndex: '10002',
-            fontFamily: 'Inter, sans-serif',
-            fontSize: styleOptions.fontSize || '16px',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+            bottom: '40px',
+            left: '50%',
+            padding: '16px 28px',
+            background: styleOptions.backgroundColor || 'linear-gradient(145deg, rgba(30,30,35,0.96), rgba(15,15,20,0.96))',
+            color: styleOptions.textColor || '#fff',
+            fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif',
+            fontSize: styleOptions.fontSize || '17px',
+            fontWeight: '500',
+            borderRadius: '14px',
+            border: '1px solid rgba(255,255,255,0.08)',
+            boxShadow: `
+                0 4px 20px rgba(0,0,0,0.5),
+                inset 0 1px 0 rgba(255,255,255,0.06)
+            `,
+            backdropFilter: 'blur(10px) saturate(150%)',
+            transform: 'translate(-50%, 60px) scale(0.8)',
             opacity: '0',
-            transform: 'translateY(20px)',
-            transition: 'opacity 0.4s ease, transform 0.4s ease',
+            transition: 'transform 0.55s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.45s ease',
             pointerEvents: 'none',
+            zIndex: '10002',
         });
 
         document.body.appendChild(notificationElement);
 
+        // Animate in with subtle overshoot for a "spring" feel
         requestAnimationFrame(() => {
             DOM.setStyle(notificationElement, {
                 opacity: '1',
-                transform: 'translateY(0)'
+                transform: 'translate(-50%, 0) scale(1.02)',
             });
+
+            setTimeout(() => {
+                DOM.setStyle(notificationElement, {
+                    transform: 'translate(-50%, 0) scale(1)',
+                });
+            }, 350); // Overshoot correction
         });
 
+        // Auto dismiss
         setTimeout(() => {
             DOM.setStyle(notificationElement, {
                 opacity: '0',
-                transform: 'translateY(20px)'
+                transform: 'translate(-50%, -30px) scale(0.96)',
             });
             setTimeout(() => {
                 DOM.remove(notificationElement);
-            }, 400); // Matches transition duration
+            }, 500);
         }, duration);
     }
+
+
 }

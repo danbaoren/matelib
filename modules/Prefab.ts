@@ -280,7 +280,7 @@ interface StreamablePrefab {
 }
 
 export class PrefabStreamer {
-    
+
     public prefabs: Map<string, StreamablePrefab> = new Map();
     public target: THREE.Object3D | null;
     private folders: Map<string, THREE.Object3D> = new Map();
@@ -296,6 +296,7 @@ export class PrefabStreamer {
     private lastUpdateTime: number = 0;
     private maxConcurrentLoads: number;
     private currentlyLoadingCount: number = 0;
+    public useFancyFade: boolean;
 
     // Queues for smooth loading/unloading
     private loadQueue: StreamablePrefab[] = [];
@@ -311,6 +312,7 @@ export class PrefabStreamer {
         fadeInDuration?: number;
         fadeOutDuration?: number;
         maxConcurrentLoads?: number;
+        useFancyFade?: boolean;
     }) {
         const {
             target,
@@ -320,7 +322,8 @@ export class PrefabStreamer {
             updateInterval = 250,
             fadeInDuration = 500,
             fadeOutDuration = 500,
-            maxConcurrentLoads = 1
+            maxConcurrentLoads = 1,
+            useFancyFade = true
         } = options;
 
         this.target = target;
@@ -331,6 +334,7 @@ export class PrefabStreamer {
         this.fadeInDuration = fadeInDuration;
         this.fadeOutDuration = fadeOutDuration;
         this.maxConcurrentLoads = maxConcurrentLoads;
+        this.useFancyFade = useFancyFade;
     }
 
     async add(options: { id: string; path?: string; renderDistance: number; position?: THREE.Vector3; folder?: string }) {
@@ -454,42 +458,46 @@ export class PrefabStreamer {
                 prefab.fadeProgress = Math.min(1, prefab.fadeProgress + (deltaTimeMs / this.fadeInDuration));
                 const easedProgress = Utils.easeInOutCubic(prefab.fadeProgress);
 
-                if (prefab.animationParams) {
-                    const { scaleOvershoot, stretchAxis, stretchAmount, rotationAxis, rotationAmount } = prefab.animationParams;
+                if (this.useFancyFade) {
+                    if (prefab.animationParams) {
+                        const { scaleOvershoot, stretchAxis, stretchAmount, rotationAxis, rotationAmount } = prefab.animationParams;
 
-                    this.setPrefabOpacity(prefab.instance, easedProgress);
+                        this.setPrefabOpacity(prefab.instance, easedProgress);
 
-                    const overshootPoint = 0.7;
-                    let overallScale: number, stretchMultiplier: number, overallRotation: number;
+                        const overshootPoint = 0.7;
+                        let overallScale: number, stretchMultiplier: number, overallRotation: number;
 
-                    if (easedProgress < overshootPoint) {
-                        const progress = Utils.easeInOutCubic(easedProgress / overshootPoint);
-                        overallScale = progress * scaleOvershoot;
-                        stretchMultiplier = 1 + (stretchAmount - 1) * progress;
-                        overallRotation = rotationAmount * progress;
-                    } else {
-                        const progress = Utils.easeInOutCubic((easedProgress - overshootPoint) / (1 - overshootPoint));
-                        overallScale = scaleOvershoot - (scaleOvershoot - 1) * progress;
-                        stretchMultiplier = stretchAmount - (stretchAmount - 1) * progress;
-                        overallRotation = rotationAmount - rotationAmount * progress;
+                        if (easedProgress < overshootPoint) {
+                            const progress = Utils.easeInOutCubic(easedProgress / overshootPoint);
+                            overallScale = progress * scaleOvershoot;
+                            stretchMultiplier = 1 + (stretchAmount - 1) * progress;
+                            overallRotation = rotationAmount * progress;
+                        } else {
+                            const progress = Utils.easeInOutCubic((easedProgress - overshootPoint) / (1 - overshootPoint));
+                            overallScale = scaleOvershoot - (scaleOvershoot - 1) * progress;
+                            stretchMultiplier = stretchAmount - (stretchAmount - 1) * progress;
+                            overallRotation = rotationAmount - rotationAmount * progress;
+                        }
+
+                        const finalScale = new Vector3().copy(prefab.originalScale).multiplyScalar(overallScale);
+                        const stretchVec = new Vector3(
+                            (stretchAxis.x !== 0) ? stretchMultiplier : 1,
+                            (stretchAxis.y !== 0) ? stretchMultiplier : 1,
+                            (stretchAxis.z !== 0) ? stretchMultiplier : 1
+                        );
+                        finalScale.multiply(stretchVec);
+                        prefab.instance.scale.copy(finalScale);
+
+                        const q = new THREE.Quaternion().setFromAxisAngle(rotationAxis, overallRotation);
+                        prefab.instance.quaternion.setFromEuler(prefab.originalRotation).multiply(q);
+
+                    } else { // Fallback to old animation
+                        this.setPrefabOpacity(prefab.instance, easedProgress);
+                        const scale = 0.8 + (0.2 * easedProgress);
+                        prefab.instance.scale.copy(prefab.originalScale).multiplyScalar(scale);
                     }
-
-                    const finalScale = new Vector3().copy(prefab.originalScale).multiplyScalar(overallScale);
-                    const stretchVec = new Vector3(
-                        (stretchAxis.x !== 0) ? stretchMultiplier : 1,
-                        (stretchAxis.y !== 0) ? stretchMultiplier : 1,
-                        (stretchAxis.z !== 0) ? stretchMultiplier : 1
-                    );
-                    finalScale.multiply(stretchVec);
-                    prefab.instance.scale.copy(finalScale);
-
-                    const q = new THREE.Quaternion().setFromAxisAngle(rotationAxis, overallRotation);
-                    prefab.instance.quaternion.setFromEuler(prefab.originalRotation).multiply(q);
-
-                } else { // Fallback to old animation
+                } else {
                     this.setPrefabOpacity(prefab.instance, easedProgress);
-                    const scale = 0.8 + (0.2 * easedProgress);
-                    prefab.instance.scale.copy(prefab.originalScale).multiplyScalar(scale);
                 }
 
                 if (prefab.fadeProgress >= 1) {
@@ -502,42 +510,46 @@ export class PrefabStreamer {
                 prefab.fadeProgress = Math.min(1, prefab.fadeProgress + (deltaTimeMs / this.fadeOutDuration));
                 const easedProgress = Utils.easeInOutCubic(prefab.fadeProgress);
 
-                if (prefab.animationParams) {
-                    const { scaleOvershoot, stretchAxis, stretchAmount, rotationAxis, rotationAmount } = prefab.animationParams;
+                if (this.useFancyFade) {
+                    if (prefab.animationParams) {
+                        const { scaleOvershoot, stretchAxis, stretchAmount, rotationAxis, rotationAmount } = prefab.animationParams;
 
-                    this.setPrefabOpacity(prefab.instance, 1.0 - easedProgress);
+                        this.setPrefabOpacity(prefab.instance, 1.0 - easedProgress);
 
-                    const exaggerationPoint = 0.4;
-                    let overallScale: number, stretchMultiplier: number, overallRotation: number;
+                        const exaggerationPoint = 0.4;
+                        let overallScale: number, stretchMultiplier: number, overallRotation: number;
 
-                    if (easedProgress < exaggerationPoint) {
-                        const progress = Utils.easeInOutCubic(easedProgress / exaggerationPoint);
-                        overallScale = 1 + (scaleOvershoot - 1) * progress;
-                        stretchMultiplier = 1 + (stretchAmount - 1) * progress;
-                        overallRotation = rotationAmount * progress;
-                    } else {
-                        const progress = Utils.easeInOutCubic((easedProgress - exaggerationPoint) / (1 - exaggerationPoint));
-                        overallScale = scaleOvershoot * (1 - progress);
-                        stretchMultiplier = stretchAmount * (1 - progress);
-                        overallRotation = rotationAmount * (1 - progress);
+                        if (easedProgress < exaggerationPoint) {
+                            const progress = Utils.easeInOutCubic(easedProgress / exaggerationPoint);
+                            overallScale = 1 + (scaleOvershoot - 1) * progress;
+                            stretchMultiplier = 1 + (stretchAmount - 1) * progress;
+                            overallRotation = rotationAmount * progress;
+                        } else {
+                            const progress = Utils.easeInOutCubic((easedProgress - exaggerationPoint) / (1 - exaggerationPoint));
+                            overallScale = scaleOvershoot * (1 - progress);
+                            stretchMultiplier = stretchAmount * (1 - progress);
+                            overallRotation = rotationAmount * (1 - progress);
+                        }
+
+                        const finalScale = new Vector3().copy(prefab.originalScale).multiplyScalar(overallScale);
+                        const stretchVec = new Vector3(
+                            (stretchAxis.x !== 0) ? stretchMultiplier : 1,
+                            (stretchAxis.y !== 0) ? stretchMultiplier : 1,
+                            (stretchAxis.z !== 0) ? stretchMultiplier : 1
+                        );
+                        finalScale.multiply(stretchVec);
+                        prefab.instance.scale.copy(finalScale);
+
+                        const q = new THREE.Quaternion().setFromAxisAngle(rotationAxis, overallRotation);
+                        prefab.instance.quaternion.setFromEuler(prefab.originalRotation).multiply(q);
+
+                    } else { // Fallback to old animation
+                        this.setPrefabOpacity(prefab.instance, 1.0 - easedProgress);
+                        const scale = 1.0 - (0.2 * easedProgress);
+                        prefab.instance.scale.copy(prefab.originalScale).multiplyScalar(scale);
                     }
-
-                    const finalScale = new Vector3().copy(prefab.originalScale).multiplyScalar(overallScale);
-                    const stretchVec = new Vector3(
-                        (stretchAxis.x !== 0) ? stretchMultiplier : 1,
-                        (stretchAxis.y !== 0) ? stretchMultiplier : 1,
-                        (stretchAxis.z !== 0) ? stretchMultiplier : 1
-                    );
-                    finalScale.multiply(stretchVec);
-                    prefab.instance.scale.copy(finalScale);
-
-                    const q = new THREE.Quaternion().setFromAxisAngle(rotationAxis, overallRotation);
-                    prefab.instance.quaternion.setFromEuler(prefab.originalRotation).multiply(q);
-
-                } else { // Fallback to old animation
+                } else {
                     this.setPrefabOpacity(prefab.instance, 1.0 - easedProgress);
-                    const scale = 1.0 - (0.2 * easedProgress);
-                    prefab.instance.scale.copy(prefab.originalScale).multiplyScalar(scale);
                 }
 
                 if (prefab.fadeProgress >= 1) {

@@ -200,6 +200,41 @@ export class rogueEditorAPI {
         return editorAPI.pathExists(fullPath);
     }
 
+    /**
+     * Writes a binary file to the project.
+     * @param projectRelativePath The path for the new file (e.g., "/Assets/MyFile.bin").
+     * @param data The data to write to the file.
+     */
+    public static async writeBinaryFile(projectRelativePath: string, data: string | ArrayBuffer | Blob): Promise<void> {
+        if (!editorAPI) return;
+
+        const projectPath = this.getProjectPath();
+        if (!projectPath) return;
+
+        const fullPath = editorAPI.joinPath(projectPath, projectRelativePath);
+
+        let buffer: Uint8Array;
+
+        if (typeof data === 'string') {
+            if (data.startsWith('data:')) {
+                const blob = await (await fetch(data)).blob();
+                const arrayBuffer = await blob.arrayBuffer();
+                buffer = new Uint8Array(arrayBuffer);
+            } else {
+                buffer = new TextEncoder().encode(data);
+            }
+        } else if (data instanceof Blob) {
+            const arrayBuffer = await data.arrayBuffer();
+            buffer = new Uint8Array(arrayBuffer);
+        } else if (data instanceof ArrayBuffer) {
+            buffer = new Uint8Array(data);
+        } else {
+            throw new Error("Invalid data type for writeBinaryFile. Must be a string, ArrayBuffer, or Blob.");
+        }
+
+        await editorAPI.outputFile(fullPath, buffer);
+    }
+
     // --- Project Management (from rogue-editor.Project) ---
 
     /**
@@ -328,5 +363,339 @@ export class rogueEditorAPI {
         if (!projectPath) return;
         const fullPath = editorAPI.joinPath(projectPath, projectRelativePath);
         editorUtils.loadFile(fullPath, onLoad);
+    }
+
+    public static copyFileSync(source: string, destination: string): void {
+        if (!editorAPI) return;
+        editorAPI.copyFileSync(source, destination);
+    }
+
+    public static openFile(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.openFile(path);
+    }
+
+    public static showFileInFolder(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.showFileInFolder(path);
+    }
+
+    public static readFileBuffer(path: string): Promise<Buffer> {
+        if (!editorAPI) return Promise.resolve(Buffer.from(""));
+        return editorAPI.readFileBuffer(path);
+    }
+
+    public static readBuildFile(path: string): Promise<string> {
+        if (!editorAPI) return Promise.resolve("");
+        return editorAPI.readBuildFile(path);
+    }
+
+    public static readDir(path: string): Promise<string[]> {
+        if (!editorAPI) return Promise.resolve([]);
+        return editorAPI.readDir(path);
+    }
+
+    public static readDirAsync(path: string): Promise<string[]> {
+        if (!editorAPI) return Promise.resolve([]);
+        return editorAPI.readDirAsync(path);
+    }
+
+    public static getFiles(path: string): Promise<string[]> {
+        if (!editorAPI) return Promise.resolve([]);
+        return editorAPI.getFiles(path);
+    }
+
+    public static fsStat(path: string): Promise<any> {
+        if (!editorAPI) return Promise.resolve(null);
+        return editorAPI.fsStat(path);
+    }
+
+    public static showOpenDialog(options: any): Promise<any> {
+        if (!editorAPI) return Promise.resolve(null);
+        return editorAPI.showOpenDialog(options);
+    }
+
+    public static watchPath(path: string, callback: (event: string, path: string) => void): void {
+        if (!editorAPI) return;
+        editorAPI.watchPath(path, callback);
+    }
+
+    public static clearPathWatchers(): void {
+        if (!editorAPI) return;
+        editorAPI.clearPathWatchers();
+    }
+
+    //public static writeFile(path: string, content: string): Promise<void> {
+    //    if (!editorAPI) return Promise.resolve();
+    //    return editorAPI.writeFile(path, content);
+    //}
+
+    public static async writeFile(projectRelativePath: string, content: string): Promise<void> {
+        if (!editorAPI) return;
+        const projectPath = this.getProjectPath();
+        if (!projectPath) return;
+        const fullPath = editorAPI.joinPath(projectPath, projectRelativePath);
+        await editorAPI.writeFile(fullPath, content);
+    }
+    
+
+    public static outputFile(path: string, content: string): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.outputFile(path, content);
+    }
+
+    public static readJSON(path: string): Promise<any> {
+        if (!editorAPI) return Promise.resolve(null);
+        return editorAPI.readJSON(path);
+    }
+
+    public static readJSONAsync(path: string): Promise<any> {
+        if (!editorAPI) return Promise.resolve(null);
+        return editorAPI.readJSONAsync(path);
+    }
+
+    public static writeJSON(path: string, content: any): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.writeJSON(path, content);
+    }
+
+    public static appQuit(): void {
+        if (!editorAPI) return;
+        editorAPI.appQuit();
+    }
+
+    public static installPackage(path: string): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.installPackage(path);
+    }
+
+    public static installRemotePackage(url: string): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.installRemotePackage(url);
+    }
+
+    public static getDownloadProgress(): any {
+        if (!editorAPI) return null;
+        return editorAPI.getDownloadProgress();
+    }
+
+    public static isInstalling(): boolean {
+        if (!editorAPI) return false;
+        return editorAPI.isInstalling();
+    }
+
+    public static createPackageFile(path: string): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.createPackageFile(path);
+    }
+
+    public static runBundleProcess(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.runBundleProcess(path);
+    }
+
+    public static openProject(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.openProject(path);
+    }
+
+    public static createProject(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.createProject(path);
+    }
+
+    public static startFileServer(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.startFileServer(path);
+    }
+
+    public static getDefaultPath(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getDefaultPath();
+    }
+
+    public static isValidNewProjectPath(path: string): boolean {
+        if (!editorAPI) return false;
+        return editorAPI.isValidNewProjectPath(path);
+    }
+
+    public static unmaximize(): void {
+        if (!editorAPI) return;
+        editorAPI.unmaximize();
+    }
+
+    public static setApplicationMenu(menu: any): void {
+        if (!editorAPI) return;
+        editorAPI.setApplicationMenu(menu);
+    }
+
+    public static getPlatform(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getPlatform();
+    }
+
+    public static popContextMenu(menu: any): void {
+        if (!editorAPI) return;
+        editorAPI.popContextMenu(menu);
+    }
+
+    public static maximize(): void {
+        if (!editorAPI) return;
+        editorAPI.maximize();
+    }
+
+    public static isMaximized(): boolean {
+        if (!editorAPI) return false;
+        return editorAPI.isMaximized();
+    }
+
+    public static setBackgroundColor(color: string): void {
+        if (!editorAPI) return;
+        editorAPI.setBackgroundColor(color);
+    }
+
+    public static center(): void {
+        if (!editorAPI) return;
+        editorAPI.center();
+    }
+
+    public static setSize(width: number, height: number): void {
+        if (!editorAPI) return;
+        editorAPI.setSize(width, height);
+    }
+
+    public static setResizable(resizable: boolean): void {
+        if (!editorAPI) return;
+        editorAPI.setResizable(resizable);
+    }
+
+    public static openExternalURL(url: string): void {
+        if (!editorAPI) return;
+        editorAPI.openExternalURL(url);
+    }
+
+    public static urlExists(url: string): Promise<boolean> {
+        if (!editorAPI) return Promise.resolve(false);
+        return editorAPI.urlExists(url);
+    }
+
+    public static getAppPath(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getAppPath();
+    }
+
+    public static getPathSep(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getPathSep();
+    }
+
+    public static getBaseName(path: string): string {
+        if (!editorAPI) return "";
+        return editorAPI.getBaseName(path);
+    }
+
+    public static getLanIP(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getLanIP();
+    }
+
+    public static getProtocol(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getProtocol();
+    }
+
+    public static useHttps(): boolean {
+        if (!editorAPI) return false;
+        return editorAPI.useHttps();
+    }
+
+    public static getAppVersion(): string {
+        if (!editorAPI) return "";
+        return editorAPI.getAppVersion();
+    }
+
+    public static gzipFiles(files: string[]): Promise<void> {
+        if (!editorAPI) return Promise.resolve();
+        return editorAPI.gzipFiles(files);
+    }
+
+    public static copyToClipboard(text: string): void {
+        if (!editorAPI) return;
+        editorAPI.copyToClipboard(text);
+    }
+
+    public static electronIsDev(): boolean {
+        if (!editorAPI) return false;
+        return editorAPI.electronIsDev();
+    }
+
+    public static checkForUpdates(): void {
+        if (!editorAPI) return;
+        editorAPI.checkForUpdates();
+    }
+
+    public static setRecentProjects(projects: string[]): void {
+        if (!editorAPI) return;
+        editorAPI.setRecentProjects(projects);
+    }
+
+    public static bundleProcessEnded(): void {
+        if (!editorAPI) return;
+        editorAPI.bundleProcessEnded();
+    }
+
+    public static getPreview(): any {
+        if (!editorAPI) return null;
+        return editorAPI.getPreview();
+    }
+
+    public static sendPreview(data: any): void {
+        if (!editorAPI) return;
+        editorAPI.sendPreview(data);
+    }
+
+    public static refreshWorker(): void {
+        if (!editorAPI) return;
+        editorAPI.refreshWorker();
+    }
+
+    public static setAssetPath(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.setAssetPath(path);
+    }
+
+    public static setProjectPath(path: string): void {
+        if (!editorAPI) return;
+        editorAPI.setProjectPath(path);
+    }
+
+    public static getProjectPaths(): string[] {
+        if (!editorAPI) return [];
+        return editorAPI.getProjectPaths();
+    }
+
+    public static license(): any {
+        if (!editorAPI) return null;
+        return editorAPI.license();
+    }
+
+    public static send(channel: string, ...args: any[]): void {
+        if (!editorAPI) return;
+        editorAPI.send(channel, ...args);
+    }
+
+    public static sendSync(channel: string, ...args: any[]): any {
+        if (!editorAPI) return null;
+        return editorAPI.sendSync(channel, ...args);
+    }
+
+    public static on(channel: string, listener: (...args: any[]) => void): void {
+        if (!editorAPI) return;
+        editorAPI.on(channel, listener);
+    }
+
+    public static removeAllListeners(channel: string): void {
+        if (!editorAPI) return;
+        editorAPI.removeAllListeners(channel);
     }
 }

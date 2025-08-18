@@ -36,6 +36,89 @@ type StructMapping<S> = {
  * - **Advanced Data Marshaling:** Helpers for reading/writing TypedArrays and conceptual 'structs'.
  * - **Resource Cleanup:** A `dispose` method for proper resource management.
  */
+
+/**
+ * A high-level runner for executing WebAssembly functions with automatic memory management.
+ * This class simplifies the process of calling WASM functions by handling the marshalling
+ * of arguments and the cleanup of allocated memory, reducing boilerplate and potential memory leaks.
+ */
+export class WasmRunner<T extends WebAssembly.Exports> {
+    private wasmModule: WasmModule<T>;
+    private activePointers: Set<number> = new Set();
+
+    /**
+     * Creates a new WasmRunner instance.
+     * @param wasmModule The underlying WasmModule to use for execution and memory management.
+     */
+    constructor(wasmModule: WasmModule<T>) {
+        this.wasmModule = wasmModule;
+    }
+
+    /**
+     * Executes a WASM function with automatic memory management for arguments.
+     *
+     * This method intelligently handles different argument types:
+     * - **Numbers and Booleans:** Passed directly to the WASM function.
+     * - **Strings:** Encoded, written to WASM memory, and the resulting pointer is passed.
+     * - **TypedArrays:** Written to WASM memory, and the resulting pointer is passed.
+     *
+     * After the function executes, all memory allocated for the arguments is automatically freed.
+     *
+     * @param funcName The name of the exported WASM function to call.
+     * @param args The arguments to pass to the function.
+     * @returns The result of the WASM function call.
+     * @throws Error if the specified function is not found or is not a function.
+     */
+    public run<R = any>(funcName: keyof T, ...args: (number | string | boolean | TypedArray)[]): R {
+        const func = this.wasmModule.exports[funcName];
+        if (typeof func !== 'function') {
+            throw new Error(`Function "${String(funcName)}" not found or is not a function in the WASM module.`);
+        }
+
+        const wasmArgs: number[] = [];
+        const pointersToFree: number[] = [];
+
+        try {
+            // Marshal arguments: convert JS types to WASM-compatible numbers (pointers or values)
+            for (const arg of args) {
+                if (typeof arg === 'string') {
+                    const ptr = this.wasmModule.writeString(arg);
+                    wasmArgs.push(ptr);
+                    pointersToFree.push(ptr);
+                } else if (arg instanceof Uint8Array || arg instanceof Int8Array || arg instanceof Uint16Array || arg instanceof Int16Array || arg instanceof Uint32Array || arg instanceof Int32Array || arg instanceof Float32Array || arg instanceof Float64Array) {
+                    const ptr = this.wasmModule.writeArray(arg);
+                    wasmArgs.push(ptr);
+                    pointersToFree.push(ptr);
+                } else if (typeof arg === 'boolean') {
+                    wasmArgs.push(arg ? 1 : 0);
+                } else if (typeof arg === 'number') {
+                    wasmArgs.push(arg);
+                } else {
+                    // For other types, you might want to throw an error or handle them specifically.
+                    console.warn(`Unsupported argument type for auto-marshalling: ${typeof arg}. Passing as is.`);
+                    wasmArgs.push(arg as any);
+                }
+            }
+
+            // Execute the WASM function with the marshalled arguments
+            return func(...wasmArgs);
+
+        } finally {
+            // Automatically free all allocated memory for the arguments after the call
+            for (const ptr of pointersToFree) {
+                this.wasmModule.free(ptr);
+            }
+        }
+    }
+
+    /**
+     * Disposes of the runner and its associated WasmModule, cleaning up all resources.
+     */
+    public dispose(): void {
+        this.wasmModule.dispose();
+    }
+}
+
 export class WasmModule<T extends WebAssembly.Exports = WebAssembly.Exports> {
     private static compiledModules: Map<string, WebAssembly.Module> = new Map();
 
@@ -487,5 +570,14 @@ export class WasmModule<T extends WebAssembly.Exports = WebAssembly.Exports> {
     public static clearCache(): void {
         this.compiledModules.clear();
         console.log("WasmModule cache cleared.");
+    }
+
+    /**
+     * Creates a high-level WasmRunner for this module instance.
+     * The runner simplifies function execution by automatically managing memory for arguments.
+     * @returns A new WasmRunner instance tied to this module.
+     */
+    public createRunner(): WasmRunner<T> {
+        return new WasmRunner<T>(this);
     }
 }

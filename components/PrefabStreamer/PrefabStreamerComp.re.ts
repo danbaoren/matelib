@@ -5,7 +5,6 @@ import { Object3D, Vector3, Camera, Box3 } from 'three';
 import { Logger } from "../../modules/Logger";
 import { rogueEditorAPI } from "../../modules/RogueEditorAPI";
 import { DOM } from "../../modules/DOM";
-import { Key } from '../../modules/InputManager'
 import MATE from '../../mate';
 
 @RE.registerComponent
@@ -67,9 +66,13 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
     public updateIntervalMs: number = 250;
     @RE.props.vector3()
     public worldSize: Vector3 = new Vector3(100000, 100000, 100000);
+    @RE.props.num()
+    public octreeLevel: number = 4;
 
     
     @RE.props.group("Appearance")
+    @RE.props.checkbox()
+    public useFancyFade: boolean = true;
     @RE.props.num(0, 5000)
     public fadeInDurationMs: number = 500;
     @RE.props.num(0, 5000)
@@ -201,12 +204,13 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
         this.streamer = new PrefabStreamer({
             target: null,
             worldBounds,
-            octreeCapacity: 8,
+            octreeCapacity: this.octreeLevel,
             enableLogging: this.enableLogging,
             updateInterval: this.updateIntervalMs,
             fadeInDuration: this.fadeInDurationMs,
             fadeOutDuration: this.fadeOutDurationMs,
-            maxConcurrentLoads: this.maxConcurrentLoads
+            maxConcurrentLoads: this.maxConcurrentLoads,
+            useFancyFade: this.useFancyFade
         });
     }
 
