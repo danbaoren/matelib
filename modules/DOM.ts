@@ -176,7 +176,7 @@ export class DOM {
      * @param parent The parent element or selector.
      * @param child The child element to append.
      */
-    public static append(parent: HTMLElement | string, child: HTMLElement): void {
+        public static append(parent: HTMLElement | string, child: Node): void {
         const parentEl = typeof parent === 'string' ? this.get(parent) : parent;
         parentEl?.appendChild(child);
     }

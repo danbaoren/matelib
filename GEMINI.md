@@ -58,7 +58,7 @@ export default class myComponent extends RE.Component {
 
     //use this to remove all runtime elements and clean resources
     // custom ui, event listeners, assets
-    RE.Runtime.scene.onStop( () => {
+    RE.Runtime.onStop( () => {
 
     })
 

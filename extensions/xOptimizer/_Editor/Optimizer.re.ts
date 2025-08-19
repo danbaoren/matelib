@@ -1,7 +1,7 @@
 import * as RE from 'rogue-engine';
 import MATE from '../../../mate';
 import { rogueEditorAPI } from '../../../modules/RogueEditorAPI';
-import { UI, Window } from '../../../modules/UI';
+import { DOM } from '../../../modules/DOM'
 
 enum MediaType {
     Image,
@@ -32,14 +32,14 @@ class OptimizerUIManager {
     private currentMediaType: MediaType = MediaType.Unknown;
 
     constructor() {
-        this.window = new UI.Window({
+        this.window = new MATE.ui.Window({
             title: "Multimedia Optimizer",
             initialSize: { width: "450px", height: "600px" },
             onClose: () => { 
                             this.window = null; } 
         });
 
-        this.dropArea = new UI.DropArea({
+        this.dropArea = new MATE.ui.DropArea({
             parent: this.window.content,
             onDrop: this.handleFileDrop.bind(this),
             style: {
@@ -50,7 +50,7 @@ class OptimizerUIManager {
             }
         });
 
-        this.previewCanvas = new UI.Canvas({
+        this.previewCanvas = new MATE.ui.Canvas({
             parent: this.dropArea.element,
             style: {
                 display: 'none',
@@ -63,12 +63,12 @@ class OptimizerUIManager {
             }
         });
 
-        const controlsContainer = new UI.Container({ parent: this.window.content });
+        const controlsContainer = new MATE.ui.Container({ parent: this.window.content });
 
-        const qualityRow = new UI.Container({ parent: controlsContainer.element, style: { display: 'flex', alignItems: 'center' } });
-        new UI.Label({ parent: qualityRow.element, text: "Quality:", style: { marginRight: '10px' } });
+        const qualityRow = new MATE.ui.Container({ parent: controlsContainer.element, style: { display: 'flex', alignItems: 'center' } });
+        new MATE.ui.Label({ parent: qualityRow.element, text: "Quality:", style: { marginRight: '10px' } });
         this.debouncedUpdatePreview = this.debounce(this.updatePreview, 300); // 300ms debounce delay
-        this.qualitySlider = new UI.Slider({
+        this.qualitySlider = new MATE.ui.Slider({
             parent: qualityRow.element,
             min: 0,
             max: 100,
@@ -79,16 +79,16 @@ class OptimizerUIManager {
                 this.debouncedUpdatePreview();
             }
         });
-        this.qualityValueLabel = new UI.Label({ parent: qualityRow.element, text: `${this.quality}%`, style: { minWidth: '40px', textAlign: 'right' } });
+        this.qualityValueLabel = new MATE.ui.Label({ parent: qualityRow.element, text: `${this.quality}%`, style: { minWidth: '40px', textAlign: 'right' } });
 
-        this.autoSaveCheckbox = new UI.Checkbox({
+        this.autoSaveCheckbox = new MATE.ui.Checkbox({
             parent: controlsContainer.element,
             label: "Auto-save on drop",
             checked: false,
             style: { marginTop: '10px', justifyContent: 'center' }
         });
 
-        this.fileInfoElement = new UI.Panel({
+        this.fileInfoElement = new MATE.ui.Panel({
             parent: controlsContainer.element,
             style: {
                 background: '#3a3a3a',
@@ -100,19 +100,22 @@ class OptimizerUIManager {
             }
         });
 
-        this.fileInfoTable = new UI.Table({
+        this.fileInfoTable = new MATE.ui.Container({ // Use Container instead of Table
             parent: this.fileInfoElement.element,
             style: {
                 width: '100%',
-                borderSpacing: '0 4px'
+                display: 'grid',
+                gridTemplateColumns: 'auto 1fr',
+                gap: '4px 10px', // Row gap, column gap
+                alignItems: 'center',
             }
         });
 
-        this.progressBar = new UI.ProgressBar({
+        this.progressBar = new MATE.ui.ProgressBar({
             parent: controlsContainer.element,
         });
 
-        this.progressLabel = new UI.Label({
+        this.progressLabel = new MATE.ui.Label({
             parent: controlsContainer.element,
             text: 'Ready',
             style: {
@@ -125,7 +128,7 @@ class OptimizerUIManager {
             }
         });
 
-        this.convertButton = new UI.Button({
+        this.convertButton = new MATE.ui.Button({
             parent: controlsContainer.element,
             text: "Convert & Save to Project",
             onClick: () => this.convertAndSave(),
@@ -163,12 +166,12 @@ class OptimizerUIManager {
             this.handleAudioFile(file);
         } else {
             this.currentMediaType = MediaType.Unknown;
-            UI.notify('Unsupported file type.', { backgroundColor: "#ff6b6b" });
+            MATE.ui.Notify.show('Unsupported file type.', { backgroundColor: "#ff6b6b" });
             // Reset UI or hide elements not applicable
             this.dropArea.showHint(true);
-            this.previewCanvas.element.style.display = 'none';
-            this.fileInfoElement.element.style.display = 'none';
-            this.convertButton.element.style.opacity = '0.5';
+            this.previewCanvas.hide();
+            this.fileInfoElement.hide();
+            DOM.setStyle(this.convertButton.element, { opacity: '0.5' });
             return;
         }
     }
@@ -204,10 +207,10 @@ class OptimizerUIManager {
                 canvas.height = drawHeight;
                 ctx.drawImage(this.originalImage, 0, 0, drawWidth, drawHeight);
 
-                this.previewCanvas.element.style.display = 'block';
+                this.previewCanvas.show();
                 this.dropArea.showHint(false);
-                this.convertButton.element.style.opacity = '1';
-                this.fileInfoElement.element.style.display = 'block';
+                DOM.setStyle(this.convertButton.element, { opacity: '1' });
+                this.fileInfoElement.show();
                 this.updatePreview();
                 if (this.autoSaveCheckbox.getChecked()) {
                     this.convertAndSave();
@@ -220,26 +223,18 @@ class OptimizerUIManager {
 
     private handleAudioFile(file: File) {
         // Placeholder for audio file handling
-        UI.notify(`Audio file dropped: ${file.name}. Audio conversion not yet implemented.`, { backgroundColor: "#ffeb3b" });
-        this.previewCanvas.element.style.display = 'none'; // Hide canvas for audio
-        this.fileInfoElement.element.style.display = 'block';
-        this.convertButton.element.style.opacity = '1';
+        MATE.ui.Notify.show(`Audio file dropped: ${file.name}. Audio conversion not yet implemented.`, { backgroundColor: "#ffeb3b" });
+        this.previewCanvas.hide(); // Hide canvas for audio
+        this.fileInfoElement.show();
+        DOM.setStyle(this.convertButton.element, { opacity: '1' });
         this.dropArea.showHint(false);
 
-        this.fileInfoTable.clearBody();
-        const cellStyles: (Partial<CSSStyleDeclaration> | null)[] = [
-            { paddingRight: '10px', whiteSpace: 'nowrap' },
-            { textAlign: 'right' }
+        const tableData = [
+            { label: 'File:', value: file.name, valueTitle: file.name },
+            { label: 'Size:', value: this.formatBytes(file.size) },
+            { label: 'Status:', value: 'Ready (Audio)' }
         ];
-        const cellStylesWithEllipsis: (Partial<CSSStyleDeclaration> | null)[] = [
-            { paddingRight: '10px', whiteSpace: 'nowrap' },
-            { textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }
-        ];
-
-        const fileNameHTML = `<b title="${file.name}">${file.name}</b>`;
-        this.fileInfoTable.addRow(['File:', fileNameHTML], cellStylesWithEllipsis);
-        this.fileInfoTable.addRow(['Size:', `<b>${this.formatBytes(file.size)}</b>`], cellStyles);
-        this.fileInfoTable.addRow(['Status:', '<b>Ready (Audio)</b>'], cellStyles);
+        this.updateFileInfoTable(tableData);
 
         if (this.autoSaveCheckbox.getChecked()) {
             this.convertAndSave();
@@ -311,35 +306,25 @@ class OptimizerUIManager {
         const savedPercentage = 100 - (newSize / this.originalFileSize * 100);
         const savedColor = savedPercentage > 0 ? '#64ce69' : '#ff6b6b';
 
-        this.fileInfoTable.clearBody();
-        const cellStyles: (Partial<CSSStyleDeclaration> | null)[] = [
-            { paddingRight: '10px', whiteSpace: 'nowrap' },
-            { textAlign: 'right' }
+        const tableData = [
+            { label: 'Original:', value: this.formatBytes(this.originalFileSize) },
+            { label: 'Potential Output:', value: this.formatBytes(newSize) },
+            { label: 'Storage Saved:', value: `${savedPercentage.toFixed(1)}%`, valueColor: savedColor },
+            { label: 'Output Path:', value: potentialNewFilePath, valueTitle: potentialNewFilePath }
         ];
-        const cellStylesWithEllipsis: (Partial<CSSStyleDeclaration> | null)[] = [
-            { paddingRight: '10px', whiteSpace: 'nowrap' },
-            { textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis' }
-        ];
-
-        const savedHTML = `<b style="color: ${savedColor};">${savedPercentage.toFixed(1)}%</b>`;
-        const pathHTML = `<b title="${potentialNewFilePath}">${potentialNewFilePath}</b>`;
-
-        this.fileInfoTable.addRow(['Original:', `<b>${this.formatBytes(this.originalFileSize)}</b>`], cellStyles);
-        this.fileInfoTable.addRow(['Potential Output:', `<b>${this.formatBytes(newSize)}</b>`], cellStyles);
-        this.fileInfoTable.addRow(['Storage Saved:', savedHTML], cellStyles);
-        this.fileInfoTable.addRow(['Output Path:', pathHTML], cellStylesWithEllipsis);
+        this.updateFileInfoTable(tableData);
     }
 
     private async convertAndSave() {
         if (!this.originalFileName || !this.originalFilePath) {
-            UI.notify("No file loaded or file path not determined.", { backgroundColor: "#ff6b6b" });
+            MATE.ui.Notify.show("No file loaded or file path not determined.", { backgroundColor: "#ff6b6b" });
             return;
         }
 
         this.progressBar.show();
-        this.progressLabel.element.style.display = 'block';
+        this.progressLabel.show();
         this.progressBar.setProgress(0);
-        this.progressLabel.element.textContent = 'Starting conversion...';
+        this.progressLabel.setText('Starting conversion...');
         await MATE.utils.wait(50); // Allow UI to update
 
         let dataToSave: string | ArrayBuffer;
@@ -349,7 +334,7 @@ class OptimizerUIManager {
         switch (this.currentMediaType) {
             case MediaType.Image:
                 if (!this.originalImage) {
-                    UI.notify("No image loaded for conversion.", { backgroundColor: "#ff6b6b" });
+                    MATE.ui.Notify.show("No image loaded for conversion.", { backgroundColor: "#ff6b6b" });
                     this.progressBar.hide();
                     return;
                 }
@@ -359,7 +344,7 @@ class OptimizerUIManager {
                 const tempCtx = tempCanvas.getContext('2d');
 
                 if (!tempCtx) {
-                    UI.notify("Could not create canvas context for image conversion.", { backgroundColor: "#ff6b6b" });
+                    MATE.ui.Notify.show("Could not create canvas context for image conversion.", { backgroundColor: "#ff6b6b" });
                     this.progressBar.hide();
                     return;
                 }
@@ -371,18 +356,18 @@ class OptimizerUIManager {
 
                 dataToSave = tempCanvas.toDataURL('image/webp', this.quality / 100);
                 if (!dataToSave.startsWith('data:image/webp')) {
-                    UI.notify("Failed to convert to WebP. Browser may not support it.", { backgroundColor: "#ff6b6b" });
+                    MATE.ui.Notify.show("Failed to convert to WebP. Browser may not support it.", { backgroundColor: "#ff6b6b" });
                     this.progressBar.hide();
                     return;
                 }
                 targetExtension = '.webp';
                 break;
             case MediaType.Audio:
-                UI.notify("Audio conversion to Ogg is not yet implemented.", { backgroundColor: "#ffeb3b" });
+                MATE.ui.Notify.show("Audio conversion to Ogg is not yet implemented.", { backgroundColor: "#ffeb3b" });
                 this.progressBar.hide();
                 return; // Exit for now, as audio conversion is not implemented
             default:
-                UI.notify("Unsupported media type for conversion.", { backgroundColor: "#ff6b6b" });
+                MATE.ui.Notify.show("Unsupported media type for conversion.", { backgroundColor: "#ff6b6b" });
                 this.progressBar.hide();
                 return;
         }
@@ -397,10 +382,10 @@ class OptimizerUIManager {
             await rogueEditorAPI.writeBinaryFile(newFilePath, dataToSave);
             this.progressBar.setProgress(100);
             this.progressLabel.element.textContent = 'Complete!';
-            UI.notify(`Successfully saved to:\n${newFilePath}`, {backgroundColor: "#64ce69ff"});
+            MATE.ui.Notify.show(`Successfully saved to:\n${newFilePath}`, {backgroundColor: "#64ce69ff"});
         } catch (error) {
             MATE.log(`File write failed: ${error}`);
-            UI.notify(`File write failed. See console for details. Path: ${newFilePath}`, { backgroundColor: "#ff6b6b" });
+            MATE.ui.Notify.show(`File write failed. See console for details. Path: ${newFilePath}`, { backgroundColor: "#ff6b6b" });
             this.progressLabel.element.textContent = 'Error!';
         } finally {
             // Hide the progress bar and label after a short delay
@@ -409,6 +394,32 @@ class OptimizerUIManager {
                 this.progressLabel.element.style.display = 'none';
             }, 2000);
         }
+    }
+
+    private updateFileInfoTable(data: Array<{ label: string; value: string; valueTitle?: string; valueColor?: string }>) {
+        // Clear existing content
+        while (this.fileInfoTable.element.firstChild) {
+            this.fileInfoTable.element.removeChild(this.fileInfoTable.element.firstChild);
+        }
+
+        data.forEach(item => {
+            new MATE.ui.Label({
+                parent: this.fileInfoTable.element,
+                text: item.label,
+                style: { paddingRight: '10px', whiteSpace: 'nowrap' }
+            });
+            new MATE.ui.Label({
+                parent: this.fileInfoTable.element,
+                text: item.value,
+                style: {
+                    textAlign: 'right',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    color: item.valueColor || 'inherit'
+                }
+            });
+        });
     }
 
     private debounce(func: Function, delay: number) {
@@ -433,25 +444,12 @@ export default class xOptimizer extends RE.Component {
     //@RE.props.button() openOptimizer2 = () => {{this.uiManager = new OptimizerUIManager();}
     //openOptimizer2Label = "🛠️ Open Multimedia Optimizer";
 
-    /*
-    start() {
-        if (this.uiManager) { return; }
-
-        UI.addButton('div#toolbar-center', {
-            text: '🛠️',
-            title: 'Asset Optimizer & Converter',
-            style: {
-                backgroundColor: '#d10000ff',
-                color: 'white',
-                padding: '10px',
-                borderRadius: '115px',
-            },
-            onClick: () => {
-                this.uiManager = new OptimizerUIManager();
-            },
-            });
-    }
-            */
+    
+    //start() {
+    //    if (this.uiManager) { return; }
+//
+    //    this.uiManager = new OptimizerUIManager();
+    //}    
 
 
 

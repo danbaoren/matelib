@@ -21,17 +21,23 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
     showDocsLabel = "📖 Documentation"
 
 
-    @RE.props.button()
+        @RE.props.button()
     openPrefabSettings() {
-        if (this.menu) {
-            this.menu.element.focus();
+        Logger.log("openPrefabSettings called.");
+        Logger.log("this.menu (before check):", this.menu);
+
+        if (!RE.Runtime.isRunning) {
+            MATE.ui.Notify.show("Prefab settings can only be accessed during runtime.", { backgroundColor: "#ffc107", textColor: "#000" });
             return;
         }
 
-        if (!RE.Runtime.isRunning) {
-            MATE.ui.notify("Prefab settings can only be accessed during runtime.", { backgroundColor: "#ffc107", textColor: "#000" });
-            return;
+        // If a menu already exists, destroy it before creating a new one
+        if (this.menu) {
+            Logger.log("Destroying existing menu.");
+            this.menu.destroy();
+            this.menu = null; // Ensure it's null after destruction
         }
+        
         this.createPrefabSettingsUI();
     }
     openPrefabSettingsLabel = "⚙️ Prefab Settings";
@@ -39,7 +45,7 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
     @RE.props.button()
     cachePrefabPositions() {
         if (!RE.Runtime.isRunning) {
-            MATE.ui.notify("Caching can only be done during runtime.", { backgroundColor: "#ffc107", textColor: "#000" });
+            MATE.ui.Notify.show("Caching can only be done during runtime.", { backgroundColor: "#ffc107", textColor: "#000" });
             return;
         }
         this.cacheAndSavePrefabPositions();
@@ -118,20 +124,20 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
     private async savePrefabConfig() {
         try {
             await rogueEditorAPI.createFile("/Static/" + this.renderConfigPath, JSON.stringify(this.prefabsConfig, null, 2));
-            MATE.ui.notify("Prefab settings saved!", { backgroundColor: "#28a745" });
+            MATE.ui.Notify.show("Prefab settings saved!", { backgroundColor: "#28a745" });
 
             for (const path in this.prefabsConfig) {
                 this.streamer.updateRenderDistance(path, this.prefabsConfig[path]);
             }
 
         } catch (e) {
-            MATE.ui.notify("Error saving settings.", { backgroundColor: "#dc3545" });
+            MATE.ui.Notify.show("Error saving settings.", { backgroundColor: "#dc3545" });
             Logger.error("Failed to save prefab config:", e);
         }
     }
 
     private async cacheAndSavePrefabPositions() {
-        MATE.ui.notify("Caching prefab positions... This may take a moment.", { backgroundColor: "#007bff" });
+        MATE.ui.Notify.show("Caching prefab positions... This may take a moment.", { backgroundColor: "#007bff" });
         const positions: { [path: string]: { x: number, y: number, z: number } } = {};
         const prefabPaths = Prefab.getAllPaths(this.streamingFolderPath);
 
@@ -145,10 +151,10 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
 
         try {
             await rogueEditorAPI.createFile("/Static/" + this.positionsConfigPath, JSON.stringify(positions, null, 2));
-            MATE.ui.notify("Prefab positions cached successfully!", { backgroundColor: "#28a745" });
+            MATE.ui.Notify.show("Prefab positions cached successfully!", { backgroundColor: "#28a745" });
             this.positionsConfig = positions;
         } catch (e) {
-            MATE.ui.notify("Error caching positions.", { backgroundColor: "#dc3545" });
+            MATE.ui.Notify.show("Error caching positions.", { backgroundColor: "#dc3545" });
             Logger.error("Failed to save positions config:", e);
         }
     }
@@ -166,18 +172,24 @@ The \`PrefabStreamerComp\` efficiently manages prefab instances in the scene. It
 
         const prefabPaths = Prefab.getAllPaths(this.streamingFolderPath);
 
+        const settingsGrid = new MATE.ui.Grid({
+            parent: this.menu.content,
+            columns: 2, // Two columns: one for label, one for input
+            gap: '10px', // Adjust as needed for desired spacing
+            justifyContent: 'start', // Left-anchor the content
+            alignItems: 'center', // Vertically align items in the center
+            style: {
+                padding: '10px', // Add some padding around the grid
+            }
+        });
+
         prefabPaths.forEach(path => {
             const prefabName = path.split('/').pop()?.replace('.roguePrefab', '') || 'Unknown';
             
-            const row = DOM.create('div', {
-                parent: this.menu.content,
-                style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0' }
-            });
-
-            new MATE.ui.Label({ parent: row, text: prefabName, style: { color: '#ccc' } });
+            new MATE.ui.Label({ parent: settingsGrid.element, text: prefabName, style: { color: '#ccc' } });
 
             const input = new MATE.ui.TextInput({
-                parent: row,
+                parent: settingsGrid.element, // Parent to the grid
                 onInput: (value) => {
                     const distance = parseInt(value, 10);
                     if (!isNaN(distance)) {

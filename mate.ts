@@ -31,7 +31,7 @@ import { Audio } from './modules/Audio';
 import { Networking } from './modules/Networking';
 import { Prefab } from './modules/Prefab';
 import { AssetManager } from './modules/AssetManager';
-import { UI } from './modules/UI';
+import * as UI from './modules/UI/index';
 import { WasmModule } from './modules/WasmLoader';
 import { WorkerManager } from './modules/WorkerManager';
 import { ColyseusClient } from './modules/Colyseus';
