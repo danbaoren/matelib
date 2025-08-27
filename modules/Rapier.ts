@@ -29,6 +29,11 @@ export interface CollisionHandler {
     id?: string;
 }
 
+export interface TagPairHandler {
+    onEnter?: (body1: RapierBody, body2: RapierBody) => void;
+    onExit?: (body1: RapierBody, body2: RapierBody) => void;
+}
+
 interface VectorTween {
     body: RAPIER.RigidBody;
     target: THREE.Vector3;
@@ -77,6 +82,7 @@ export class Rapier {
 
     private static bodyTags: Map<number, string[]> = new Map();
     private static bodyHandlers: Map<number, CollisionHandler[]> = new Map();
+    private static tagPairHandlers: Map<string, TagPairHandler> = new Map();
 
     // #region CORE
     // =================================================================
@@ -644,6 +650,11 @@ export class Rapier {
     // #region EVENTS
     // =================================================================
 
+    public static addTagPairHandler(tag1: string, tag2: string, handler: TagPairHandler) {
+        const key = `${tag1}|${tag2}`;
+        this.tagPairHandlers.set(key, handler);
+    }
+
     public static setTags(bodyOrObject: RapierBody | THREE.Object3D | string, tags: string[]) {
         const body = this._resolveBody(bodyOrObject);
         if (body) {
@@ -756,7 +767,7 @@ export class Rapier {
         return rapierBody.body;
     }
 
-    private static processHandlers(selfBody: RapierBody, otherBody: RapierBody, started: boolean) {
+    private static processBodyHandlers(selfBody: RapierBody, otherBody: RapierBody, started: boolean) {
         const handlers = this.bodyHandlers.get(selfBody.body.handle);
         if (!handlers || handlers.length === 0) return;
 
@@ -781,6 +792,33 @@ export class Rapier {
         }
     }
 
+    private static processTagPairHandlers(rb1: RapierBody, rb2: RapierBody, started: boolean) {
+        const tags1 = this.bodyTags.get(rb1.body.handle) || [];
+        const tags2 = this.bodyTags.get(rb2.body.handle) || [];
+
+        for (const tag1 of tags1) {
+            for (const tag2 of tags2) {
+                // Check for handler registered as (tag1, tag2)
+                let key = `${tag1}|${tag2}`;
+                let handler = this.tagPairHandlers.get(key);
+                if (handler) {
+                    const callback = started ? handler.onEnter : handler.onExit;
+                    if (callback) callback(rb1, rb2);
+                }
+
+                // Check for handler registered as (tag2, tag1) to avoid defining both
+                let reverseKey = `${tag2}|${tag1}`;
+                if (key !== reverseKey) {
+                    let reverseHandler = this.tagPairHandlers.get(reverseKey);
+                    if (reverseHandler) {
+                        const callback = started ? reverseHandler.onEnter : reverseHandler.onExit;
+                        if (callback) callback(rb2, rb1);
+                    }
+                }
+            }
+        }
+    }
+
     private static drainEvents() {
         if (!this.world || !this.eventQueue) return;
         this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
@@ -794,9 +832,14 @@ export class Rapier {
             const rb2 = body2.userData as RapierBody;
             if (!rb1 || !rb2) return;
 
-            this.processHandlers(rb1, rb2, started);
-            this.processHandlers(rb2, rb1, started);
+            // New global tag-pair system
+            this.processTagPairHandlers(rb1, rb2, started);
+
+            // Body-specific handler system
+            this.processBodyHandlers(rb1, rb2, started);
+            this.processBodyHandlers(rb2, rb1, started);
             
+            // Original low-level listener system
             const listeners1 = this.collisionListeners.get(body1.handle);
             if (listeners1) {
                 const callbacks = started ? listeners1.onStart : listeners1.onEnd;
