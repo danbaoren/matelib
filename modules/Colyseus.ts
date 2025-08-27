@@ -1,6 +1,37 @@
-
-import { Client, Room } from "colyseus.js";
 import { Logger } from "./Logger";
+
+// Define interfaces for Colyseus types to provide type safety
+interface Room<T = any> {
+    id: string;
+    name: string;
+    sessionId: string;
+    state: T;
+    onStateChange(callback: (state: T) => void): void;
+    onMessage(messageType: "*", callback: (type: string | number, message: any) => void): any;
+    onMessage<M>(messageType: string | number, callback: (message: M) => void): any;
+    onError(callback: (code: number, message?: string) => void): void;
+    onLeave(callback: (code: number) => void): void;
+    send(type: string | number, message?: any): void;
+    leave(consented?: boolean): Promise<number>;
+    roomId: string;
+}
+
+interface Client {
+    join<T>(roomName: string, options?: any): Promise<Room<T>>;
+    joinOrCreate<T>(roomName: string, options?: any): Promise<Room<T>>;
+    reconnect<T>(roomId: string, sessionId: string): Promise<Room<T>>;
+}
+
+let ClientClass: new (serverAddress: string) => Client;
+let isColyseusAvailable = false;
+
+try {
+    const Colyseus = require("colyseus.js");
+    ClientClass = Colyseus.Client;
+    isColyseusAvailable = true;
+} catch (e) {
+    // It's okay if Colyseus is not found, we'll use a dummy class.
+}
 
 // Basic EventEmitter implementation
 interface EventEmitter {
@@ -33,172 +64,31 @@ class BasicEventEmitter implements EventEmitter {
     }
 }
 
-/**
- * # ColyseusClient - Real-time Multiplayer Integration
- * Provides a robust and easy-to-use interface for integrating Colyseus real-time multiplayer
- * capabilities into your Rogue Engine web applications and games.
- *
- * --- USAGE ---
- *
- * ### 1. Basic Setup and Room Joining
- * ```typescript
- * import { ColyseusClient } from "./Colyseus";
- *
- * // Initialize the client with your Colyseus server address
- * const colyseus = new ColyseusClient("ws://localhost:2567");
- *
- * async function connectAndJoin() {
- *     try {
- *         // Join or create a room named "my_room"
- *         const room = await colyseus.joinOrCreate("my_room", { options  });
- *         console.log("Joined successfully:", room.name, room.roomId);
- *
- *         // Listen for state changes
- *         room.onStateChange((state) => {
- *             console.log("Room state changed:", state);
- *         });
- *
- *         // Listen for custom messages from the server
- *         room.onMessage("my_message_type", (message) => {
- *             console.log("Received message:", message);
- *         });
- *
- *         // Send a message to the room
- *         room.send("player_action", { action: "move", x: 10, y: 5 });
- *
- *     } catch (e) {
- *         console.error("Join error:", e);
- *     }
- * }
- *
- * connectAndJoin();
- * ```
- *
- * ### 2. Event Handling
- * ```typescript
- * import { ColyseusClient } from "./Colyseus";
- *
- * const colyseus = new ColyseusClient("ws://localhost:2567");
- *
- * // Listen for connection status changes
- * colyseus.onConnected(() => {
- *     console.log("Colyseus client connected to server.");
- * });
- *
- * colyseus.onDisconnected(() => {
- *     console.log("Colyseus client disconnected from server.");
- * });
- *
- * // Listen for room-specific events
- * colyseus.onRoomJoined((room) => {
- *     console.log(`Client joined room: ${room.name} (${room.roomId})`);
- * });
- *
- * colyseus.onRoomLeft((roomName, roomId, code) => {
- *     console.log(`Client left room: ${roomName} (${roomId}) with code ${code}`);
- * });
- *
- * colyseus.onError((code, message, roomId) => {
- *     console.error(`Error in room ${roomId}: [${code}] ${message}`);
- * });
- *
- * // You can also listen for any message received by the client
- * colyseus.onAnyMessage((type, message, roomId) => {
- *     console.log(`Received any message of type "${type}" from room ${roomId}:`, message);
- * });
- *
- * // Don't forget to call a join method to initiate connection
- * // colyseus.joinOrCreate("my_room");
- * ```
- *
- * ### 3. Reconnection and Disconnection
- * ```typescript
- * import { ColyseusClient } from "./Colyseus";
- *
- * const colyseus = new ColyseusClient("ws://localhost:2567");
- * let currentRoomId: string | null = null;
- * let currentSessionId: string | null = null;
- *
- * async function exampleFlow() {
- *     try {
- *         const room = await colyseus.joinOrCreate("reconnect_test_room");
- *         currentRoomId = room.roomId;
- *         currentSessionId = room.sessionId;
- *         console.log("Initial join successful. Room ID:", currentRoomId, "Session ID:", currentSessionId);
- *
- *         // Simulate a temporary disconnection and then try to reconnect
- *         // In a real app, this might happen due to network issues
- *         colyseus.disconnect();
- *         console.log("Simulated disconnection.");
- *
- *         // After some time, try to reconnect
- *         if (currentRoomId && currentSessionId) {
- *             console.log("Attempting to reconnect...");
- *             const reconnectedRoom = await colyseus.reconnect(currentRoomId, currentSessionId);
- *             console.log("Reconnection successful:", reconnectedRoom.name, reconnectedRoom.roomId);
- *         }
- *
- *         // When done, leave the room and disconnect
- *         await colyseus.disconnectAndLeave();
- *         console.log("Cleanly disconnected and left room.");
- *
- *     } catch (e) {
- *         console.error("Operation failed:", e);
- *     }
- * }
- *
- * exampleFlow();
- * ```
- *
- * --- END USAGE ---
- */
-export class ColyseusClient {
+class RealColyseusClient {
     private client: Client;
     private currentRoom: Room | null = null;
     private serverAddress: string;
     private eventEmitter: BasicEventEmitter = new BasicEventEmitter();
     private _isConnected: boolean = false;
 
-    /**
-     * Initializes the Colyseus client with the server address.
-     * @param serverAddress The WebSocket address of your Colyseus server (e.g., "ws://localhost:2567").
-     */
     constructor(serverAddress: string) {
         this.serverAddress = serverAddress;
-        this.client = new Client(serverAddress);
+        this.client = new ClientClass(serverAddress);
         Logger.log(`ColyseusClient initialized for server: ${serverAddress}`);
     }
 
-    /**
-     * Gets the Colyseus client instance.
-     * @returns The Colyseus Client instance.
-     */
     public getClient(): Client {
         return this.client;
     }
 
-    /**
-     * Gets the currently joined Colyseus room instance.
-     * @returns The Colyseus Room instance, or null if not joined to a room.
-     */
     public getCurrentRoom(): Room | null {
         return this.currentRoom;
     }
 
-    /**
-     * Gets the current connection status of the Colyseus client.
-     * @returns True if the client is connected to a Colyseus server, false otherwise.
-     */
     public isConnected(): boolean {
         return this._isConnected;
     }
 
-    /**
-     * Joins an existing Colyseus room.
-     * @param roomName The name of the room to join.
-     * @param options Optional. Options to send to the room upon joining.
-     * @returns A Promise that resolves with the joined Room instance.
-     */
     public async join<T = any>(roomName: string, options: any = {}): Promise<Room<T>> {
         try {
             Logger.log(`Attempting to join room: ${roomName}`);
@@ -217,12 +107,6 @@ export class ColyseusClient {
         }
     }
 
-    /**
-     * Creates a new Colyseus room, or joins it if it already exists.
-     * @param roomName The name of the room to create or join.
-     * @param options Optional. Options to send to the room upon creation/joining.
-     * @returns A Promise that resolves with the joined Room instance.
-     */
     public async joinOrCreate<T = any>(roomName: string, options: any = {}): Promise<Room<T>> {
         try {
             Logger.log(`Attempting to join or create room: ${roomName}`);
@@ -241,16 +125,10 @@ export class ColyseusClient {
         }
     }
 
-    /**
-     * Reconnects to a previously joined Colyseus room using its ID and session ID.
-     * @param roomId The ID of the room to reconnect to.
-     * @param sessionId The session ID of the client in that room.
-     * @returns A Promise that resolves with the reconnected Room instance.
-     */
     public async reconnect<T = any>(roomId: string, sessionId: string): Promise<Room<T>> {
         try {
             Logger.log(`Attempting to reconnect to room: ${roomId} with session: ${sessionId}`);
-            const room = await this.client.reconnect<T>(roomId, sessionId as any);
+            const room = await this.client.reconnect<T>(roomId, sessionId);
             this.setupRoomListeners(room);
             this.currentRoom = room;
             Logger.log(`Reconnected to room: ${room.name} (ID: ${room.roomId})`);
@@ -263,12 +141,6 @@ export class ColyseusClient {
         }
     }
 
-
-    /**
-     * Leaves the currently joined room.
-     * @param consented Optional. Whether the client is leaving consensually.
-     * @returns A Promise that resolves when the room is left.
-     */
     public async leaveCurrentRoom(consented: boolean = true): Promise<void> {
         if (this.currentRoom) {
             const roomName = this.currentRoom.name;
@@ -282,12 +154,9 @@ export class ColyseusClient {
         }
     }
 
-    /**
-     * Disconnects the Colyseus client from the server.
-     */
     public disconnect(): void {
         if (this.client) {
-            this.currentRoom?.leave(); // Colyseus client has a disconnect method
+            this.currentRoom?.leave();
             this.currentRoom = null;
             Logger.log("Colyseus client disconnected.");
             this.eventEmitter.emit('onDisconnected');
@@ -297,10 +166,6 @@ export class ColyseusClient {
         }
     }
 
-    /**
-     * Leaves the current room and then disconnects the Colyseus client from the server.
-     * This ensures a clean shutdown of the connection.
-     */
     public async disconnectAndLeave(): Promise<void> {
         if (this.currentRoom) {
             await this.leaveCurrentRoom();
@@ -309,11 +174,6 @@ export class ColyseusClient {
         Logger.log("Colyseus client disconnected and left room (if any).");
     }
 
-    /**
-     * Sends a message to the currently joined room.
-     * @param type The message type.
-     * @param message The message payload.
-     */
     public sendMessage<M = any>(type: string, message: M): void {
         if (this.currentRoom) {
             Logger.log(`Sending message "${type}" to room ${this.currentRoom.roomId}`);
@@ -323,10 +183,6 @@ export class ColyseusClient {
         }
     }
 
-    /**
-     * Sets up common listeners for a Colyseus room and emits events.
-     * @param room The Room instance to set up listeners for.
-     */
     private setupRoomListeners<T = any>(room: Room<T>): void {
         room.onStateChange((state: T) => {
             this.eventEmitter.emit('onStateChange', state, room.roomId);
@@ -352,20 +208,10 @@ export class ColyseusClient {
         });
     }
 
-    /**
-     * Allows direct access to the room's state.
-     * @returns The current state of the joined room, or null if no room is joined.
-     */
     public getRoomState<T = any>(): T | null {
         return this.currentRoom ? (this.currentRoom.state as T) : null;
     }
 
-    /**
-     * Adds a listener for a specific message type on the current room.
-     * @param type The message type to listen for.
-     * @param handler The callback function to execute on message.
-     * @returns A function to remove the listener.
-     */
     public onMessage<M = any>(type: string, handler: (message: M) => void): () => void {
         if (!this.currentRoom) {
             Logger.warn("No room currently joined to listen for messages.");
@@ -375,7 +221,6 @@ export class ColyseusClient {
         return () => dispose.remove();
     }
 
-    // Event Emitter methods for external subscription
     public onRoomJoined(listener: (room: Room) => void): () => void {
         return this.eventEmitter.on('onRoomJoined', listener);
     }
@@ -412,3 +257,32 @@ export class ColyseusClient {
         return this.eventEmitter.on('onAnyMessage', listener);
     }
 }
+
+class DummyColyseusClient {
+    constructor(...args: any[]) {
+        Logger.warn("Colyseus is not installed. All ColyseusClient operations will be ignored.");
+    }
+    public getClient() { Logger.warn("Colyseus not available."); return null; }
+    public getCurrentRoom() { Logger.warn("Colyseus not available."); return null; }
+    public isConnected() { Logger.warn("Colyseus not available."); return false; }
+    public async join(...args: any[]) { Logger.warn("Colyseus not available."); throw new Error("Colyseus not available."); }
+    public async joinOrCreate(...args: any[]) { Logger.warn("Colyseus not available."); throw new Error("Colyseus not available."); }
+    public async reconnect(...args: any[]) { Logger.warn("Colyseus not available."); throw new Error("Colyseus not available."); }
+    public async leaveCurrentRoom(...args: any[]) { Logger.warn("Colyseus not available."); }
+    public disconnect() { Logger.warn("Colyseus not available."); }
+    public async disconnectAndLeave() { Logger.warn("Colyseus not available."); }
+    public sendMessage(...args: any[]) { Logger.warn("Colyseus not available."); }
+    public getRoomState() { Logger.warn("Colyseus not available."); return null; }
+    public onMessage(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onRoomJoined(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onRoomLeft(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onReconnectSuccess(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onStateChange(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onError(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onDisconnected(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onRoomJoinError(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onReconnectError(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+    public onAnyMessage(...args: any[]): () => void { Logger.warn("Colyseus not available."); return () => {}; }
+}
+
+export const ColyseusClient = isColyseusAvailable ? RealColyseusClient : DummyColyseusClient;

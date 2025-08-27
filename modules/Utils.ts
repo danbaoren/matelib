@@ -148,8 +148,14 @@ export class Utils {
         return btoa(String.fromCharCode.apply(null, Array.from(buffer)));
     }
 
-    private static base64ToBuffer(base64: string): Uint8Array {
-        return new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)));
+    private static base64ToBuffer(base64: string): ArrayBuffer {
+        const binaryString = atob(base64);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+        }
+        return bytes.buffer;
     }
 
     public static async copyToClipboard(text: string): Promise<void> {
