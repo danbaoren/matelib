@@ -21,3 +21,4 @@ export * from './Image';
 export * from './Canvas';
 export * from './ProgressBar';
 export * from './utils';
+export * from './Transition';

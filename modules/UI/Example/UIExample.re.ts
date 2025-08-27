@@ -1,13 +1,14 @@
 import * as RE from 'rogue-engine';
 import * as THREE from 'three';
-import { Window } from '../matelib/modules/UI/Window';
-import { Button } from '../matelib/modules/UI/Button';
-import { DOM } from '../matelib/modules/DOM';
-import { Logger } from '../matelib/modules/Logger';
-import { Input } from '../matelib/modules/UI/Input';
-import { Header } from '../matelib/modules/UI/Header';
-import { SceneView } from '../matelib/modules/UI/SceneView';
-import { FloatingScene } from '../matelib/modules/UI/FloatingScene';
+import { Window } from '../Window';
+import { Button } from '../Button';
+import { DOM } from '../../DOM';
+import { Logger } from '../../Logger';
+import { Input } from '../Input';
+import { Header } from '../Header';
+import { SceneView } from '../SceneView';
+import { FloatingScene } from '../FloatingScene';
+import { Transition } from '../Transition';
 
 @RE.registerComponent
 export default class UIExample extends RE.Component {
@@ -17,6 +18,12 @@ export default class UIExample extends RE.Component {
     this.createExampleWindows();
   };
   createWindowsLabel = "Create Example Windows";
+
+  @RE.props.button()
+  createWindowss = () => {
+    Transition.wipe(10000)
+  };
+  createWindowssLabel = "Create Example Windows";
 
   awake() {
     // Optional: Call createExampleWindows directly on awake if you want them to appear immediately

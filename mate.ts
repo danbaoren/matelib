@@ -40,6 +40,7 @@ import { Raycast } from './modules/Raycast';
 import { Debug } from './modules/Debug';
 import { Animation } from './modules/Animation';
 import { InputManager } from './modules/InputManager';
+import { Rapier } from './modules/Rapier';
 
 export default class mate {
     public static log = Logger.log.bind(Logger);
@@ -48,6 +49,8 @@ export default class mate {
     public static logcolor = Logger.logcolor.bind(Logger);
 
     public static screenshoot = AssetManager.screenshot.bind(AssetManager);
+
+    public static notify = UI.Notify.show.bind(UI);
 
     public static dom = DOM;
     public static utils = Utils;
@@ -67,6 +70,7 @@ export default class mate {
     public static debug = Debug;
     public static animation = Animation;
     public static input = InputManager.getInstance();
+    public static rapier = Rapier;
 
     public static nuke = Utils.nuke;
 
