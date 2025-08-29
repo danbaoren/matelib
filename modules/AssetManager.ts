@@ -509,46 +509,6 @@ export class AssetManager {
         return dataUrl;
     }
 
-private static showScreenshotPreview(dataUrl: string) {
-    const existingPreview = document.getElementById('screenshot-preview-container');
-    if (existingPreview) {
-        document.body.removeChild(existingPreview);
-    }
-
-    const previewContainer = document.createElement('div');
-    previewContainer.id = 'screenshot-preview-container';
-    previewContainer.style.position = 'fixed';
-    previewContainer.style.top = '20px';
-    previewContainer.style.left = '20px';
-    previewContainer.style.zIndex = '10000';
-    previewContainer.style.borderRadius = '4px'; // Increased border-radius for a softer, more modern look
-    previewContainer.style.backgroundColor = 'rgba(28, 28, 30, 0.9)'; // Darker background for more contrast and depth
-    previewContainer.style.padding = '12px'; // Slightly increased padding
-    previewContainer.style.boxShadow = '0 8px 25px rgba(0,0,0,0.7)'; // Deeper, more pronounced shadow
-    previewContainer.style.backdropFilter = 'blur(10px)'; // Stronger blur effect
-    previewContainer.style.border = '1px solid rgba(255, 255, 255, 0.15)'; // Sharper, more visible border
-
-    const img = document.createElement('img');
-    img.src = dataUrl;
-    img.style.maxWidth = '300px';
-    img.style.maxHeight = '230px';
-    img.style.display = 'block';
-    img.style.borderRadius = '1px'; // Consistent, slightly rounded corners
-    img.style.border = '1px solid rgba(255, 255, 255, 0.1)'; // Subtle border for the image
-
-    // The close button has been removed as per your request. The preview now auto-hides after 5 seconds.
-
-    previewContainer.appendChild(img);
-    document.body.appendChild(previewContainer);
-
-    // Auto-hides the preview after 5 seconds, as the close button is removed.
-    setTimeout(() => {
-        if (document.body.contains(previewContainer)) {
-            document.body.removeChild(previewContainer);
-        }
-    }, 5000);
-}
-
 
     /**
      * Finds and logs all canvas elements on the page, returning them as a list.
@@ -659,4 +619,46 @@ private static showScreenshotPreview(dataUrl: string) {
 
         return new Blob([String(content)], { type: mimeType || 'text/plain' });
     }
+
+
+    private static showScreenshotPreview(dataUrl: string) {
+    const existingPreview = document.getElementById('screenshot-preview-container');
+    if (existingPreview) {
+        document.body.removeChild(existingPreview);
+    }
+
+    const previewContainer = document.createElement('div');
+    previewContainer.id = 'screenshot-preview-container';
+    previewContainer.style.position = 'fixed';
+    previewContainer.style.top = '20px';
+    previewContainer.style.left = '20px';
+    previewContainer.style.zIndex = '10000';
+    previewContainer.style.borderRadius = '4px'; // Increased border-radius for a softer, more modern look
+    previewContainer.style.backgroundColor = 'rgba(28, 28, 30, 0.9)'; // Darker background for more contrast and depth
+    previewContainer.style.padding = '12px'; // Slightly increased padding
+    previewContainer.style.boxShadow = '0 8px 25px rgba(0,0,0,0.7)'; // Deeper, more pronounced shadow
+    previewContainer.style.backdropFilter = 'blur(10px)'; // Stronger blur effect
+    previewContainer.style.border = '1px solid rgba(255, 255, 255, 0.15)'; // Sharper, more visible border
+
+    const img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.maxWidth = '300px';
+    img.style.maxHeight = '230px';
+    img.style.display = 'block';
+    img.style.borderRadius = '1px'; // Consistent, slightly rounded corners
+    img.style.border = '1px solid rgba(255, 255, 255, 0.1)'; // Subtle border for the image
+
+    // The close button has been removed as per your request. The preview now auto-hides after 5 seconds.
+
+    previewContainer.appendChild(img);
+    document.body.appendChild(previewContainer);
+
+    // Auto-hides the preview after 5 seconds, as the close button is removed.
+    setTimeout(() => {
+        if (document.body.contains(previewContainer)) {
+            document.body.removeChild(previewContainer);
+        }
+    }, 5000);
+}
+
 }
