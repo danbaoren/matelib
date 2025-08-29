@@ -20,6 +20,8 @@ export class Header extends Component<HeaderProps> {
         const headerStyle: Partial<CSSStyleDeclaration> = {
             color: '#ffffff',
             fontWeight: '600',
+            margin: '0',
+            padding: '0',
         };
 
         const finalProps = {

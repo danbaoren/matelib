@@ -1,3 +1,4 @@
+
 import { Component } from './Component';
 import { ComponentProps } from './types';
 import { DOM } from '../DOM';
@@ -42,15 +43,18 @@ const defaultWindowStyle: Partial<CSSStyleDeclaration> = {
     height: 'auto',
     minWidth: '200px',
     minHeight: '150px',
-    backgroundColor: '#2a2a2a',
+    backgroundColor: 'rgba(54, 54, 54, 0.6)', // Slightly dark with opacity
+    backdropFilter: 'blur(5px)', // Blurry background
+    overflow: 'hidden', // Ensure blur is contained within bounds
     border: '0px solid #444',
     borderRadius: '0px',
-    boxShadow: '0 0px 0px rgba(0, 0, 0, 0.3)',
+    boxShadow: 'none',
     zIndex: '10000',
     display: 'flex',
     flexDirection: 'column',
     fontFamily: 'Inter, sans-serif',
-    transition: 'width 0.2s ease, height 0.2s ease, min-width 0.2s ease, min-height 0.2s ease, background-color 0.2s ease, border 0.2s ease, box-shadow 0.2s ease',
+    margin: '0',
+    padding: '0',
 };
 
 export class Window<P extends WindowProps> extends Component<P> {
@@ -61,6 +65,8 @@ export class Window<P extends WindowProps> extends Component<P> {
     protected hoverIconElement: HTMLElement | null = null;
     protected resizeHandle: HTMLElement | null = null;
     protected collapseTimeout: number | null = null;
+    protected isLocked: boolean = false;
+    protected lockButton?: Button;
 
     protected isDragging = false;
     protected offsetX = 0;
@@ -196,6 +202,22 @@ export class Window<P extends WindowProps> extends Component<P> {
             });
         }
 
+        if (props.hoverable) {
+            this.lockButton = new Button({
+                parent: controlsContainer,
+                text: this.isLocked ? '🔒 Locked' : '🔓 Unlocked',
+                onClick: () => {
+                    this.isLocked = !this.isLocked;
+                    if (this.lockButton) {
+                        this.lockButton.element.textContent = this.isLocked ? '🔒 Locked' : '🔓 Unlocked';
+                    }
+                },
+                style: {
+                    background: 'none', border: 'none', fontSize: '10px', cursor: 'pointer', color: '#E0E0E0', lineHeight: '1', padding: '0 5px'
+                }
+            });
+        }
+
         if (props.closable !== false) {
             this.closeButton = new Button({
                 parent: controlsContainer,
@@ -211,7 +233,7 @@ export class Window<P extends WindowProps> extends Component<P> {
             parent: this.element,
             style: {
                 flexGrow: '1', overflowY: 'auto', padding: '10px', color: '#E0E0E0',
-                display: 'flex', flexDirection: 'column', alignItems: 'center',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%'
             },
         });
 
@@ -339,7 +361,7 @@ export class Window<P extends WindowProps> extends Component<P> {
     }
 
     protected handleMouseLeave = () => {
-        if (this.props.hoverable && !this.isDragging && !this.isResizing && !this.isCollapsed) {
+        if (this.props.hoverable && !this.isDragging && !this.isResizing && !this.isCollapsed && !this.isLocked) {
             this.collapseTimeout = window.setTimeout(() => this.collapse(), 300);
         }
     }

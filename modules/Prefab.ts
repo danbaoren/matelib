@@ -249,6 +249,28 @@ export class Prefab {
         }
         Scene.destroy(instance, disposeAssets);
     }
+
+    public static async pickRandom(
+        folderPath: string,
+        options: {
+            parent?: THREE.Object3D | null;
+            position?: THREE.Vector3;
+            rotation?: THREE.Euler;
+            scale?: THREE.Vector3;
+            name?: string;
+        } = {}
+    ): Promise<THREE.Object3D | null> {
+        const allPaths = this.getAllPaths(folderPath);
+        if (allPaths.length === 0) {
+            Logger.error(`No prefabs found in folder: "${folderPath}"`);
+            return null;
+        }
+
+        const randomIndex = Math.floor(Math.random() * allPaths.length);
+        const randomPrefabPath = allPaths[randomIndex];
+
+        return this.instantiate(randomPrefabPath, options);
+    }
 }
 
 interface StreamablePrefab {

@@ -24,6 +24,16 @@ export class UIUtils {
         }
 
         const styles = `
+            /* Variables for consistent theming */
+            :root {
+                --mate-bg-primary: #1a1a1a;
+                --mate-bg-secondary: #222222;
+                --mate-border-color: #444444;
+                --mate-text-color: #e0e0e0;
+                --mate-accent-color: #6a82fb;
+                --mate-accent-color-hover: #5a70e0;
+            }
+
             /* General resets and base styles for the UI */
             .mate-window,
             .mate-window-header,
@@ -35,12 +45,12 @@ export class UIUtils {
 
             /* The main window container */
             .mate-window {
-                background-color: #2c2f33;
-                border: 1px solid #4a4e54;
-                border-radius: 6px;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+                background: linear-gradient(to bottom, var(--mate-bg-primary), #121212);
+                border: 1px solid var(--mate-border-color); /* Re-introducing a subtle border for brutalism */
+                border-radius: 0px;
+                box-shadow: none;
                 font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
-                color: #f2f2f2;
+                color: var(--mate-text-color);
                 overflow: hidden;
                 transition: all 0.2s ease-in-out;
             }
@@ -48,19 +58,19 @@ export class UIUtils {
             /* Draggable header bar */
             .mate-window-header {
                 padding: 10px 15px;
-                background-color: #23272a;
+                background: linear-gradient(to bottom, var(--mate-bg-secondary), #1b1b1b);
                 cursor: grab;
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                border-bottom: 1px solid #4a4e54;
+                border-bottom: 1px solid var(--mate-border-color);
                 user-select: none;
             }
             
             .mate-window-title {
                 font-weight: 600;
                 font-size: 16px;
-                color: #ffffff;
+                color: var(--mate-text-color);
             }
 
             .mate-window-controls {
@@ -70,29 +80,31 @@ export class UIUtils {
 
             /* Header buttons (close, minimize, etc.) */
             .mate-window-close-btn,
-            .mate-window-collapse-btn {
+            .mate-window-collapse-btn,
+            .mate-window-fullscreen-btn { /* Added fullscreen button */
                 background: none;
                 border: none;
                 font-size: 20px;
                 line-height: 1;
-                color: #99aab5;
+                color: var(--mate-text-color);
                 cursor: pointer;
                 padding: 0 4px;
                 transition: color 0.2s ease;
             }
 
             .mate-window-close-btn:hover {
-                color: #f04747;
+                color: #f04747; /* Keep red for close */
             }
             
-            .mate-window-collapse-btn:hover {
-                color: #ffffff;
+            .mate-window-collapse-btn:hover,
+            .mate-window-fullscreen-btn:hover {
+                color: var(--mate-accent-color);
             }
 
             /* The scrollable content area */
             .mate-window-content {
                 padding: 15px;
-                background-color: #2c2f33;
+                background: linear-gradient(to bottom, var(--mate-bg-primary), #121212);
                 overflow-y: auto;
                 flex-grow: 1;
                 display: flex;
@@ -102,54 +114,54 @@ export class UIUtils {
 
             /* Primary action button */
             .mate-button {
-                background-color: #7289da;
-                color: #ffffff;
-                border: none;
+                background: linear-gradient(to bottom, var(--mate-accent-color), var(--mate-accent-color-hover));
+                color: var(--mate-text-color);
+                border: 1px solid var(--mate-accent-color);
                 padding: 10px 18px;
-                border-radius: 4px;
+                border-radius: 0px; /* Brutalist */
                 cursor: pointer;
                 font-weight: 600;
-                transition: background-color 0.2s ease;
+                transition: background-color 0.2s ease, border-color 0.2s ease;
                 text-transform: uppercase;
                 letter-spacing: 0.5px;
             }
 
             .mate-button:hover {
-                background-color: #677bc4;
+                background: linear-gradient(to bottom, var(--mate-accent-color-hover), var(--mate-accent-color));
+                border-color: var(--mate-accent-color-hover);
             }
 
             /* Input fields */
             .mate-text-input input {
                 width: 100%;
                 padding: 10px 12px;
-                border: 1px solid #4a4e54;
-                border-radius: 4px;
-                background-color: #23272a;
-                color: #ffffff;
+                border: 1px solid var(--mate-border-color);
+                border-radius: 0px; /* Brutalist */
+                background-color: var(--mate-bg-secondary);
+                color: var(--mate-text-color);
                 transition: border-color 0.2s ease, box-shadow 0.2s ease;
             }
 
             .mate-text-input input:focus {
                 outline: none;
-                border-color: #7289da;
-                box-shadow: 0 0 0 1px #7289da;
+                border-color: var(--mate-accent-color);
+                box-shadow: 0 0 0 1px var(--mate-accent-color);
             }
 
             /* --- Custom Checkbox --- */
             .mate-checkbox {
-                /* Base styles are now set in the component constructor */
-                position: relative; /* For positioning the input */
+                position: relative;
             }
 
             .mate-checkmark {
                 position: relative;
                 height: 18px;
                 width: 18px;
-                background-color: #23272a;
-                border: 1px solid #4a4e54;
-                border-radius: 3px;
+                background-color: var(--mate-bg-secondary);
+                border: 1px solid var(--mate-border-color);
+                border-radius: 0px; /* Brutalist */
                 transition: background-color 0.2s, border-color 0.2s;
-                flex-shrink: 0; /* Prevent it from shrinking */
+                flex-shrink: 0;
             }
 
             /* Checkmark symbol (the check) */
@@ -161,7 +173,7 @@ export class UIUtils {
                 top: 2px;
                 width: 5px;
                 height: 10px;
-                border: solid white;
+                border: solid var(--mate-text-color);
                 border-width: 0 2px 2px 0;
                 transform: rotate(45deg);
             }
@@ -173,24 +185,24 @@ export class UIUtils {
 
             /* Change background on check */
             .mate-checkbox input:checked ~ .mate-checkmark {
-                background-color: #7289da;
-                border-color: #7289da;
+                background-color: var(--mate-accent-color);
+                border-color: var(--mate-accent-color);
             }
 
             /* Hover effect */
             .mate-checkbox:hover .mate-checkmark {
-                border-color: #99aab5;
+                border-color: var(--mate-accent-color);
             }
 
             .mate-checkbox-label {
-                color: #b9bbbe;
+                color: var(--mate-text-color);
             }
 
             /* Labels for inputs */
             .mate-label {
                 font-weight: 500;
                 margin-bottom: 5px;
-                color: #b9bbbe;
+                color: var(--mate-text-color);
                 display: block;
             }
 
@@ -198,19 +210,19 @@ export class UIUtils {
             .mate-panel,
             .mate-container,
             .mate-form {
-                background-color: #36393f;
-                border: 1px solid #4a4e54;
+                background-color: var(--mate-bg-secondary);
+                border: 1px solid var(--mate-border-color);
                 padding: 12px;
-                border-radius: 4px;
+                border-radius: 0px; /* Brutalist */
             }
 
             /* Scrollable container for lists, etc. */
             .mate-scroll-container {
                 overflow-y: auto;
-                border: 1px solid #4a4e54;
-                border-radius: 4px;
+                border: 1px solid var(--mate-border-color);
+                border-radius: 0px; /* Brutalist */
                 padding: 10px;
-                background-color: #36393f;
+                background-color: var(--mate-bg-secondary);
             }
 
             /* Image styles */
@@ -218,7 +230,7 @@ export class UIUtils {
                 max-width: 100%;
                 height: auto;
                 display: block;
-                border-radius: 4px;
+                border-radius: 0px; /* Brutalist */
             }
 
             /* --- Progress Bar --- */
@@ -226,9 +238,9 @@ export class UIUtils {
                 position: relative;
                 width: 100%;
                 height: 24px;
-                background-color: #23272a;
-                border: 1px solid #4a4e54;
-                border-radius: 4px;
+                background-color: var(--mate-bg-secondary);
+                border: 1px solid var(--mate-border-color);
+                border-radius: 0px; /* Brutalist */
                 overflow: hidden;
                 margin: 10px 0;
                 box-sizing: border-box;
@@ -237,17 +249,7 @@ export class UIUtils {
             .mate-progress-bar-fill {
                 height: 100%;
                 width: 0%;
-                background-color: #7289da; /* Fallback */
-                background-image: linear-gradient(
-                    45deg, 
-                    rgba(255, 255, 255, 0.15) 25%, 
-                    transparent 25%, 
-                    transparent 50%, 
-                    rgba(255, 255, 255, 0.15) 50%, 
-                    rgba(255, 255, 255, 0.15) 75%, 
-                    transparent 75%, 
-                    transparent
-                );
+                background: linear-gradient(45deg, var(--mate-accent-color), var(--mate-accent-color-hover));
                 background-size: 40px 40px;
                 transition: width 0.3s ease-in-out;
                 animation: mate-progress-bar-stripes 1s linear infinite;

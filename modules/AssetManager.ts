@@ -497,7 +497,7 @@ export class AssetManager {
         filename: string = "screenshot",
         type: string = 'image/png',
         quality?: number
-    ): Promise<void> {
+    ): Promise<string> {
         // Force a render of the scene to populate the drawing buffer right before capture.
         renderer.render(scene, camera);
 
@@ -506,6 +506,7 @@ export class AssetManager {
 
         // Immediately capture the canvas content.
         await this.downloadCanvas(renderer.domElement, filename, type, quality);
+        return dataUrl;
     }
 
 private static showScreenshotPreview(dataUrl: string) {

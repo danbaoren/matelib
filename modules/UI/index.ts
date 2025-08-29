@@ -12,6 +12,8 @@ export * from './Panel';
 export * from './Select';
 export * from './Slider';
 export * from './TextInput';
+import { Window } from './Window';
+export { Window as Menu };
 export * from './Window';
 export * from './DropArea';
 export * from './SceneView';
